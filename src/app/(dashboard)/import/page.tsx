@@ -40,6 +40,9 @@ const PLATFORM_ALIASES: Record<string, ContentPlatform> = {
 const STATUS_ALIASES: Record<string, ContentStatus> = {
   "not started": "not_started", "not_started": "not_started",
   draft: "not_started", wip: "drafted", drafted: "drafted",
+  // content-ment specific
+  "needs kernel": "not_started", needskernel: "not_started", kernel: "not_started",
+  idea: "not_started", backlog: "not_started",
   review: "author_review", "in review": "author_review", "author review": "author_review",
   "sent for approval": "sent_for_approval", "for approval": "sent_for_approval",
   approved: "approved", approve: "approved", "approved by owner": "approved",
@@ -122,6 +125,9 @@ const HEADER_MAP: Record<string, keyof ParsedRow> = {
   tags: "tags", tag: "tags", labels: "tags", label: "tags",
   // notes
   notes: "notes", note: "notes", comments: "notes", remarks: "notes",
+  // extra columns → append to notes
+  belief: "notes", gac: "notes", aeotarget: "notes",
+  owner: "notes", format: "notes", assignee: "notes",
 };
 
 function rowsToPreview(rows: string[][], defaultPlatform = "other"): ParsedRow[] {
@@ -170,6 +176,9 @@ export default function ImportPage() {
   const [fileError, setFileError] = useState("");
   const [fileDragging, setFileDragging] = useState(false);
   const [sheetNames, setSheetNames] = useState<string[]>([]);
+
+  // Replace mode
+  const [replaceAll, setReplaceAll] = useState(false);
 
   // Paste state
   const [pasteText, setPasteText] = useState("");
@@ -359,10 +368,16 @@ export default function ImportPage() {
       }
     }
 
+    if (replaceAll && entityId) {
+      // Delete all existing content for this entity before importing
+      contentStore.getAll()
+        .filter(c => c.entityId === entityId)
+        .forEach(c => contentStore.delete(c.id));
+    }
     contentStore.saveMany(items);
     setImported(true);
     const platformList = platformsToUse ? platformsToUse.join(", ") : "detected platforms";
-    toast({ title: `${items.length} items imported`, description: `${preview.length} hooks × ${platformsToUse?.length ?? 1} platform${(platformsToUse?.length ?? 1) !== 1 ? "s" : ""} (${platformList})` });
+    toast({ title: `${items.length} items imported${replaceAll ? " (replaced existing)" : ""}`, description: `${preview.length} hooks × ${platformsToUse?.length ?? 1} platform${(platformsToUse?.length ?? 1) !== 1 ? "s" : ""} (${platformList})` });
   }
 
   const COLUMNS = ["id / unitid / ref (→ content ID prefix)", "pillar / category / series", "hook / working title (→ hook & title)", "body / content", "platform / channel", "status / stage", "scheduledAt / date", "tags"];
@@ -539,10 +554,21 @@ export default function ImportPage() {
                     <CheckCircle className="h-3.5 w-3.5" /> Imported
                   </span>
                 ) : (
-                  <Button size="sm" className="h-7 text-xs" onClick={doImport} disabled={!hasPlatformData && selectedPlatforms.length === 0}>
-                    <Download className="mr-1.5 h-3.5 w-3.5" />
-                    Import {hasPlatformData ? preview.length : preview.length * selectedPlatforms.length} items
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={replaceAll}
+                        onChange={e => setReplaceAll(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded"
+                      />
+                      <span className="text-xs text-muted-foreground">Replace existing</span>
+                    </label>
+                    <Button size="sm" className="h-7 text-xs" onClick={doImport} disabled={!hasPlatformData && selectedPlatforms.length === 0}>
+                      <Download className="mr-1.5 h-3.5 w-3.5" />
+                      Import {hasPlatformData ? preview.length : preview.length * selectedPlatforms.length} items
+                    </Button>
+                  </div>
                 )}
               </div>
 
