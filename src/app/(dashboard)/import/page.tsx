@@ -42,19 +42,21 @@ const STATUS_ALIASES: Record<string, ContentStatus> = {
 };
 
 function toSheetCsvUrl(input: string): string | null {
-  // Handle direct /export?format=csv URLs
-  if (input.includes("export?format=csv")) return input;
+  const trimmed = input.trim();
 
-  // Extract spreadsheet ID from various Google Sheets URL formats
-  const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  // Already a direct CSV export URL
+  if (trimmed.includes("export?format=csv") || trimmed.includes("output=csv")) return trimmed;
+
+  // Extract spreadsheet ID
+  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
   if (!match) return null;
   const id = match[1];
 
-  // Extract gid (sheet tab) if present
-  const gidMatch = input.match(/[#&?]gid=(\d+)/);
-  const gid = gidMatch ? gidMatch[1] : "0";
+  // Extract gid (sheet tab) if present — omit entirely if not found (avoids 400 on default tab)
+  const gidMatch = trimmed.match(/[#&?]gid=(\d+)/);
+  const gidParam = gidMatch ? `&gid=${gidMatch[1]}` : "";
 
-  return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+  return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&single=true${gidParam}`;
 }
 
 function parseCsv(text: string): string[][] {

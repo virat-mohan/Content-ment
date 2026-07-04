@@ -27,7 +27,11 @@ export async function GET(req: NextRequest) {
           { status: 403 }
         );
       }
-      return new NextResponse(`Google returned ${res.status}`, { status: 502 });
+      const body = await res.text().catch(() => "");
+      const hint = res.status === 400
+        ? "Google returned 400 — make sure the sheet is published publicly (Share → Anyone with the link → Viewer)."
+        : `Google returned ${res.status}.`;
+      return new NextResponse(`${hint}${body ? " Details: " + body.slice(0, 200) : ""}`, { status: 502 });
     }
 
     const text = await res.text();
