@@ -14,7 +14,6 @@ import { useSidebar } from "@/components/layout/sidebar-context";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard",  href: "/dashboard" },
-  { icon: Building2,       label: "Entities",   href: "/entities"  },
   { icon: Folder,          label: "Campaigns",  href: "/campaigns" },
   { icon: FileText,        label: "Content",    href: "/content"   },
   { icon: Image,           label: "Assets",     href: "/assets"    },
@@ -99,6 +98,11 @@ export function Sidebar() {
             {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
           </button>
         )}
+      </div>
+
+      {/* Entities link */}
+      <div className={cn("border-b py-2", (!mobile && collapsed) ? "flex items-center justify-center px-2" : "px-2")}>
+        <NavItem icon={Building2} label="Entities" href="/entities" />
       </div>
 
       {/* Main nav */}
