@@ -43,7 +43,7 @@ export default function AnalyticsPage() {
 
   const total = filtered.length;
   const published = filtered.filter((c) => c.status === "published").length;
-  const drafts = filtered.filter((c) => c.status === "draft").length;
+  const drafts = filtered.filter((c) => c.status === "not_started" || c.status === "drafted").length;
   const scheduled = filtered.filter((c) => c.scheduledAt && c.status !== "published").length;
 
   const byPlatform = Object.entries(

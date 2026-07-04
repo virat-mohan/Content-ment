@@ -13,9 +13,11 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 const STATUS_DOT: Record<string, string> = {
-  draft: "bg-muted-foreground/40",
-  review: "bg-yellow-400",
-  approved: "bg-blue-400",
+  not_started: "bg-muted-foreground/20",
+  drafted: "bg-muted-foreground/40",
+  author_review: "bg-yellow-400",
+  sent_for_approval: "bg-blue-300",
+  approved: "bg-blue-500",
   published: "bg-green-400",
   archived: "bg-muted-foreground/20",
 };

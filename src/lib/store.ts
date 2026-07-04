@@ -61,8 +61,26 @@ export const aiSettingsStore = {
   save: (s: AISettings): void => set("cm_ai_settings", s),
 };
 
-export type ContentStatus = "draft" | "review" | "approved" | "published" | "archived";
+export type ContentStatus =
+  | "not_started"
+  | "drafted"
+  | "author_review"
+  | "sent_for_approval"
+  | "approved"
+  | "published"
+  | "archived";
+
 export type ContentPlatform = "linkedin" | "twitter" | "instagram" | "blog" | "youtube" | "email" | "other";
+
+export const CONTENT_STATUS_LABELS: Record<ContentStatus, string> = {
+  not_started: "Not started",
+  drafted: "Drafted",
+  author_review: "Reviewed by author",
+  sent_for_approval: "Sent for approval",
+  approved: "Approved by owner",
+  published: "Published",
+  archived: "Archived",
+};
 
 export interface ContentItem {
   id: string;
@@ -76,6 +94,9 @@ export interface ContentItem {
   tags: string[];
   notes?: string;
   importSource?: string;
+  reviewToken?: string;
+  reviewedAt?: string;
+  approvedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

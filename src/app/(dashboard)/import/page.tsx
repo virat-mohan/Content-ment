@@ -35,9 +35,11 @@ const PLATFORM_ALIASES: Record<string, ContentPlatform> = {
 };
 
 const STATUS_ALIASES: Record<string, ContentStatus> = {
-  draft: "draft", wip: "draft",
-  review: "review", "in review": "review",
-  approved: "approved", approve: "approved",
+  "not started": "not_started", "not_started": "not_started",
+  draft: "not_started", wip: "drafted", drafted: "drafted",
+  review: "author_review", "in review": "author_review", "author review": "author_review",
+  "sent for approval": "sent_for_approval", "for approval": "sent_for_approval",
+  approved: "approved", approve: "approved", "approved by owner": "approved",
   published: "published", live: "published", done: "published",
   archived: "archived", archive: "archived",
 };
@@ -312,7 +314,7 @@ export default function ImportPage() {
           title: row.title,
           body: row.body,
           platform,
-          status: (STATUS_ALIASES[row.status.toLowerCase()] ?? "draft") as ContentStatus,
+          status: (STATUS_ALIASES[row.status.toLowerCase()] ?? "not_started") as ContentStatus,
           scheduledAt: row.scheduledAt ? (() => { try { return new Date(row.scheduledAt).toISOString(); } catch { return undefined; } })() : undefined,
           tags: row.tags ? row.tags.split(/[,;|]/).map((t) => t.trim()).filter(Boolean) : [],
           notes: row.notes,
@@ -559,7 +561,7 @@ export default function ImportPage() {
                           <Badge variant="secondary" className="text-[10px] capitalize">{row.platform || "other"}</Badge>
                         </td>
                         <td className="px-4 py-2.5 hidden sm:table-cell text-muted-foreground truncate max-w-[160px]">{row.tags}</td>
-                        <td className="px-4 py-2.5 capitalize text-muted-foreground">{row.status || "draft"}</td>
+                        <td className="px-4 py-2.5 capitalize text-muted-foreground">{row.status || "not started"}</td>
                         <td className="px-4 py-2.5 hidden md:table-cell text-muted-foreground truncate max-w-[120px]">{row.notes}</td>
                       </tr>
                     ))}

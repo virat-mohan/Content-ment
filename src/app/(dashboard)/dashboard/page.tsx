@@ -12,8 +12,10 @@ import { formatRelativeDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 const STATUS_DOT: Record<string, string> = {
-  draft: "bg-muted-foreground/40",
-  review: "bg-yellow-400",
+  not_started: "bg-muted-foreground/20",
+  drafted: "bg-muted-foreground/40",
+  author_review: "bg-yellow-400",
+  sent_for_approval: "bg-blue-300",
   approved: "bg-blue-400",
   published: "bg-green-400",
   archived: "bg-muted-foreground/20",
@@ -29,7 +31,7 @@ export default function DashboardPage() {
   }, [activeId]);
 
   const published = content.filter((c) => c.status === "published").length;
-  const drafts = content.filter((c) => c.status === "draft").length;
+  const drafts = content.filter((c) => c.status === "not_started" || c.status === "drafted").length;
   const recent = [...content].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
 
   return (
