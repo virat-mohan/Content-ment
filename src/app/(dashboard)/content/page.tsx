@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import {
-  contentStore, knowledgeStore, entityStore, aiSettingsStore,
+  contentStore, knowledgeStore, entityStore, aiSettingsStore, assetStore,
   type ContentItem, type ContentStatus, type ContentPlatform,
   CONTENT_STATUS_LABELS, PLATFORM_CODE, generateContentId,
 } from "@/lib/store";
@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Trash2, Pencil, ExternalLink, Sparkles, Share2,
   Copy, Check, Loader2, Download, RefreshCw, BookOpen, AlertCircle,
+  Image as ImageIcon, Film, X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatRelativeDate } from "@/lib/utils";
@@ -175,6 +176,7 @@ export default function ContentPage() {
   const [aiError, setAiError] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [availableAssets, setAvailableAssets] = useState<ReturnType<typeof assetStore.getAll>>([]);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(() => {
@@ -184,10 +186,11 @@ export default function ContentPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Load knowledge docs when dialog opens
+  // Load knowledge docs and assets when dialog opens
   useEffect(() => {
     if (open && activeId) {
       setKnowledgeDocs(knowledgeStore.getAll(activeId));
+      setAvailableAssets(assetStore.getAll(activeId));
     }
   }, [open, activeId]);
 
@@ -249,6 +252,7 @@ export default function ContentPage() {
       tags: editing.tags ?? [],
       notes: editing.notes,
       importSource: editing.importSource,
+      assetIds: editing.assetIds ?? [],
       reviewToken: editing.reviewToken,
       reviewedAt: editing.reviewedAt,
       approvedAt: editing.approvedAt,
@@ -646,6 +650,44 @@ export default function ContentPage() {
                 </p>
               )}
             </div>
+
+            {/* Assets */}
+            {availableAssets.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Attached assets</Label>
+                <div className="flex flex-wrap gap-2">
+                  {availableAssets.map(asset => {
+                    const attached = (editing.assetIds ?? []).includes(asset.id);
+                    const src = asset.type === "image" ? assetStore.getDataUrl(asset.id) : undefined;
+                    return (
+                      <button
+                        key={asset.id}
+                        type="button"
+                        onClick={() => {
+                          const ids = editing.assetIds ?? [];
+                          setEditing({ ...editing, assetIds: attached ? ids.filter(id => id !== asset.id) : [...ids, asset.id] });
+                        }}
+                        className={`relative flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs transition-colors ${attached ? "border-violet-400 bg-violet-50 dark:bg-violet-950/30" : "border-border hover:border-muted-foreground/40"}`}
+                        title={asset.name}
+                      >
+                        {src
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={src} alt="" className="h-6 w-6 rounded object-cover shrink-0" />
+                          : asset.type === "video"
+                            ? <Film className="h-4 w-4 text-violet-500 shrink-0" />
+                            : <ImageIcon className="h-4 w-4 text-blue-500 shrink-0" />
+                        }
+                        <span className="max-w-[80px] truncate">{asset.name}</span>
+                        {attached && <Check className="h-3 w-3 text-violet-600 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Tap to attach/detach. Upload more in <a href="/assets" className="underline underline-offset-2">Assets</a>.
+                </p>
+              </div>
+            )}
 
             {/* Share for review */}
             <div className="rounded-lg border p-3 space-y-2 bg-muted/20">

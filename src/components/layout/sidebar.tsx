@@ -15,14 +15,14 @@ import { useSidebar } from "@/components/layout/sidebar-context";
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard",  href: "/dashboard" },
   { icon: Building2,       label: "Entities",   href: "/entities"  },
-  { icon: FileText,        label: "Content",     href: "/content"   },
-  { icon: TableProperties, label: "Import",      href: "/import"    },
-  { icon: Calendar,        label: "Calendar",    href: "/calendar"  },
-  { icon: Folder,          label: "Campaigns",   href: "/campaigns" },
-  { icon: BookOpen,        label: "Knowledge",   href: "/knowledge" },
-  { icon: Image,           label: "Assets",      href: "/assets"    },
-  { icon: Inbox,           label: "Inbox",       href: "/inbox"     },
-  { icon: BarChart2,       label: "Analytics",   href: "/analytics" },
+  { icon: Folder,          label: "Campaigns",  href: "/campaigns" },
+  { icon: FileText,        label: "Content",    href: "/content"   },
+  { icon: Image,           label: "Assets",     href: "/assets"    },
+  { icon: Calendar,        label: "Calendar",   href: "/calendar"  },
+  { icon: BookOpen,        label: "Knowledge",  href: "/knowledge" },
+  { icon: BarChart2,       label: "Analytics",  href: "/analytics" },
+  { icon: TableProperties, label: "Import",     href: "/import"    },
+  { icon: Inbox,           label: "Inbox",      href: "/inbox"     },
 ];
 
 const bottomItems = [

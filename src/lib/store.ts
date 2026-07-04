@@ -91,9 +91,10 @@ export interface ContentItem {
   id: string;
   contentId: string;    // human-readable e.g. AJ-001-LI
   entityId: string;
-  pillar: string;       // content pillar / category
-  hook: string;         // the hook / angle (short)
-  title: string;        // working title (may equal hook)
+  campaignId?: string;  // optional campaign association
+  pillar: string;
+  hook: string;
+  title: string;
   body: string;
   platform: ContentPlatform;
   status: ContentStatus;
@@ -102,6 +103,7 @@ export interface ContentItem {
   tags: string[];
   notes?: string;
   importSource?: string;
+  assetIds?: string[];  // attached media assets
   reviewToken?: string;
   reviewedAt?: string;
   approvedAt?: string;
@@ -211,4 +213,54 @@ export const knowledgeStore = {
   delete: (entityId: string, id: string) => {
     set(`cm_knowledge_${entityId}`, knowledgeStore.getAll(entityId).filter((k) => k.id !== id));
   },
+};
+
+// ─── Assets ──────────────────────────────────────────────────────────────────
+
+export type AssetType = "image" | "video" | "document" | "other";
+
+export interface Asset {
+  id: string;
+  entityId: string;
+  name: string;
+  type: AssetType;
+  mimeType: string;
+  size: number;          // bytes
+  width?: number;
+  height?: number;
+  dataUrl?: string;      // base64 for images ≤ 1 MB; undefined for larger/video
+  createdAt: string;
+}
+
+export function assetTypeFromMime(mime: string): AssetType {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.includes("pdf") || mime.includes("document") || mime.includes("text")) return "document";
+  return "other";
+}
+
+const ASSET_DATA_LIMIT = 1.5 * 1024 * 1024; // 1.5 MB — store dataUrl below this
+
+export const assetStore = {
+  getAll: (entityId: string): Asset[] =>
+    get<Asset[]>(`cm_assets_${entityId}`, []),
+
+  save: (asset: Asset): void => {
+    const all = assetStore.getAll(asset.entityId).filter(a => a.id !== asset.id);
+    // Store dataUrl separately to keep the metadata list small
+    if (asset.dataUrl) {
+      set(`cm_asset_data_${asset.id}`, asset.dataUrl);
+    }
+    set(`cm_assets_${asset.entityId}`, [...all, { ...asset, dataUrl: undefined }]);
+  },
+
+  getDataUrl: (id: string): string | undefined =>
+    get<string | undefined>(`cm_asset_data_${id}`, undefined),
+
+  delete: (entityId: string, id: string): void => {
+    set(`cm_assets_${entityId}`, assetStore.getAll(entityId).filter(a => a.id !== id));
+    if (typeof window !== "undefined") localStorage.removeItem(`cm_asset_data_${id}`);
+  },
+
+  canStoreData: (size: number) => size <= ASSET_DATA_LIMIT,
 };
