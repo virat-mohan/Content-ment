@@ -61,6 +61,44 @@ export const aiSettingsStore = {
   save: (s: AISettings): void => set("cm_ai_settings", s),
 };
 
+export type ContentStatus = "draft" | "review" | "approved" | "published" | "archived";
+export type ContentPlatform = "linkedin" | "twitter" | "instagram" | "blog" | "youtube" | "email" | "other";
+
+export interface ContentItem {
+  id: string;
+  entityId: string;
+  title: string;
+  body: string;
+  platform: ContentPlatform;
+  status: ContentStatus;
+  scheduledAt?: string;
+  publishedAt?: string;
+  tags: string[];
+  notes?: string;
+  importSource?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const contentStore = {
+  getAll: (entityId?: string): ContentItem[] => {
+    const all = get<ContentItem[]>("cm_content", []);
+    return entityId ? all.filter((c) => c.entityId === entityId) : all;
+  },
+  save: (item: ContentItem): void => {
+    const all = get<ContentItem[]>("cm_content", []).filter((c) => c.id !== item.id);
+    set("cm_content", [...all, item]);
+  },
+  saveMany: (items: ContentItem[]): void => {
+    const existing = get<ContentItem[]>("cm_content", []);
+    const ids = new Set(items.map((i) => i.id));
+    set("cm_content", [...existing.filter((c) => !ids.has(c.id)), ...items]);
+  },
+  delete: (id: string): void => {
+    set("cm_content", get<ContentItem[]>("cm_content", []).filter((c) => c.id !== id));
+  },
+};
+
 export const knowledgeStore = {
   getAll: (entityId: string) => get<{ id: string; title: string; content: string; type: string; createdAt: string }[]>(`cm_knowledge_${entityId}`, []),
   save: (entityId: string, item: { id: string; title: string; content: string; type: string; createdAt: string }) => {

@@ -14,14 +14,17 @@ import {
   Zap,
   BookOpen,
   Inbox,
+  TableProperties,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Logo } from "@/components/layout/logo";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: Building2, label: "Entities", href: "/entities" },
   { icon: FileText, label: "Content", href: "/content" },
+  { icon: TableProperties, label: "Import", href: "/import" },
   { icon: Calendar, label: "Calendar", href: "/calendar" },
   { icon: Folder, label: "Campaigns", href: "/campaigns" },
   { icon: BookOpen, label: "Knowledge", href: "/knowledge" },
@@ -46,11 +49,7 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-screen w-14 flex-col border-r bg-background">
       <div className="flex h-14 items-center justify-center border-b">
-        <Link href="/dashboard" className="flex items-center justify-center">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground">
-            <span className="text-xs font-bold text-background">C</span>
-          </div>
-        </Link>
+        <Logo collapsed />
       </div>
 
       <nav className="flex flex-1 flex-col items-center gap-1 py-3 px-2">
