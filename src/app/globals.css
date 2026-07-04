@@ -69,3 +69,18 @@
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Mobile: remove sidebar padding offset — sidebar is a drawer overlay */
+@media (max-width: 767px) {
+  main {
+    padding-left: 0 !important;
+  }
+}
+
+/* Print styles for Export for Execution page */
+@media print {
+  nav, aside, header button, .no-print { display: none !important; }
+  main { padding-left: 0 !important; }
+  body { font-size: 12px; }
+  .line-clamp-2 { -webkit-line-clamp: unset; overflow: visible; }
+}

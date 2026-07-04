@@ -60,7 +60,7 @@ export default function AnalyticsPage() {
   return (
     <div className="flex flex-col">
       <Header title="Analytics" />
-      <div className="flex-1 p-6 animate-fade-in space-y-6">
+      <div className="flex-1 p-4 sm:p-6 animate-fade-in space-y-6">
 
         {/* KPI row */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

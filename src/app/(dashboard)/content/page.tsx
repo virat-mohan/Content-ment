@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import {
-  contentStore, knowledgeStore, entityStore, aiSettingsStore, assetStore,
+  contentStore, knowledgeStore, entityStore, aiSettingsStore, assetStore, brandBookStore,
   type ContentItem, type ContentStatus, type ContentPlatform,
   CONTENT_STATUS_LABELS, PLATFORM_CODE, generateContentId,
 } from "@/lib/store";
@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Trash2, Pencil, ExternalLink, Sparkles, Share2,
   Copy, Check, Loader2, Download, RefreshCw, BookOpen, AlertCircle,
-  Image as ImageIcon, Film, X,
+  Image as ImageIcon, Film, X, SendToBack,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatRelativeDate } from "@/lib/utils";
@@ -271,6 +271,13 @@ export default function ContentPage() {
     toast({ title: "Deleted" });
   }
 
+  function markPublished(item: ContentItem) {
+    const now = new Date().toISOString();
+    contentStore.save({ ...item, status: "published", publishedAt: now, updatedAt: now });
+    load();
+    toast({ title: `${item.contentId || "Item"} marked as published` });
+  }
+
   async function runAIDraft(refine = false) {
     if (!activeEntity) {
       setAiError("No active entity selected.");
@@ -299,7 +306,8 @@ export default function ContentPage() {
     const platform = (editing.platform ?? "linkedin") as ContentPlatform;
     const docs = knowledgeDocs.length ? knowledgeDocs : knowledgeStore.getAll(activeEntity.id);
 
-    const systemPrompt = buildSystemPrompt(activeEntity, docs);
+    const brandBook = brandBookStore.get(activeEntity.id);
+    const systemPrompt = buildSystemPrompt(activeEntity, docs, brandBook);
     const userPrompt = buildDraftPrompt(
       refine ? editing : { ...editing, body: "" }, // refine = improve existing, else fresh
       platform
@@ -357,7 +365,7 @@ export default function ContentPage() {
   return (
     <div className="flex flex-col">
       <Header title="Content" />
-      <div className="flex-1 p-6 animate-fade-in space-y-4">
+      <div className="flex-1 p-4 sm:p-6 animate-fade-in space-y-4">
 
         {/* Toolbar */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -401,8 +409,8 @@ export default function ContentPage() {
             <Button size="sm" onClick={openNew} className="mt-1"><Plus className="mr-1 h-3.5 w-3.5" /> New Content</Button>
           </div>
         ) : (
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full">
+          <div className="rounded-lg border overflow-x-auto">
+            <table className="w-full min-w-[560px]">
               <thead>
                 <tr className="border-b bg-muted/30">
                   <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground w-28">ID</th>
@@ -451,6 +459,15 @@ export default function ContentPage() {
                     </td>
                     <td className="px-3 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {item.status === "approved" && (
+                          <Button
+                            variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/20"
+                            title="Mark as published"
+                            onClick={() => markPublished(item)}
+                          >
+                            <SendToBack className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(item)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -718,6 +735,18 @@ export default function ContentPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
+              {editing.status === "approved" && editing.id && (
+                <Button
+                  size="sm" variant="outline"
+                  className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-800 dark:hover:bg-green-950/20 mr-auto"
+                  onClick={() => {
+                    const item = items.find(i => i.id === editing.id);
+                    if (item) { markPublished(item); setOpen(false); }
+                  }}
+                >
+                  <SendToBack className="h-3.5 w-3.5" /> Mark as Published
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
               <Button size="sm" onClick={save}>Save</Button>
             </div>

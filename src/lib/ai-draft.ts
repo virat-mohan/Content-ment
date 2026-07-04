@@ -202,7 +202,11 @@ export interface KnowledgeDoc {
   type: string;
 }
 
-export function buildSystemPrompt(entity: Entity, knowledgeDocs: KnowledgeDoc[]): string {
+export function buildSystemPrompt(
+  entity: Entity,
+  knowledgeDocs: KnowledgeDoc[],
+  brandBook?: import("@/lib/store").BrandBook,
+): string {
   const brandDocs = knowledgeDocs.filter(d =>
     /brand|voice|tone|style|guideline|persona|about/i.test(d.type + " " + d.title)
   );
@@ -218,8 +222,23 @@ export function buildSystemPrompt(entity: Entity, knowledgeDocs: KnowledgeDoc[])
     entity.website ? `Website: ${entity.website}` : "",
   ].filter(Boolean);
 
+  // Inject structured brand book sections (higher priority than raw docs)
+  if (brandBook) {
+    const bb = brandBook;
+    const addSection = (label: string, val: string | undefined) => {
+      if (val?.trim()) lines.push(`\n## ${label}\n${val.trim()}`);
+    };
+    addSection("About / Background",        bb.about);
+    addSection("Brand Voice & Tone",        bb.brandVoice);
+    addSection("Target Audience",           bb.targetAudience);
+    addSection("Products & Services",       bb.productsServices);
+    addSection("Key Messages & Proof Points", bb.keyMessages);
+    addSection("Competitive Landscape",     bb.competitors);
+    addSection("Content Guidelines",        bb.contentGuidelines);
+  }
+
   if (brandDocs.length) {
-    lines.push("\n## Brand Voice & Guidelines");
+    lines.push("\n## Brand Voice & Guidelines (source docs)");
     brandDocs.forEach(d => lines.push(`### ${d.title}\n${d.content}`));
   }
 

@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Search, Settings, ChevronDown, Check } from "lucide-react";
+import { Search, Settings, ChevronDown, Check, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { entityStore, type Entity } from "@/lib/store";
 import { getActiveEntityId, setActiveEntityId } from "@/lib/active-entity";
+import { useSidebar } from "@/components/layout/sidebar-context";
 
 interface HeaderProps {
   title?: string;
@@ -17,6 +18,7 @@ export function Header({ title }: HeaderProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { setMobileOpen } = useSidebar();
 
   useEffect(() => {
     const all = entityStore.getAll();
@@ -52,13 +54,18 @@ export function Header({ title }: HeaderProps) {
     name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/95 backdrop-blur px-4">
+    <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 backdrop-blur px-3 sm:px-4">
+
+      {/* Mobile hamburger */}
+      <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden shrink-0" onClick={() => setMobileOpen(true)}>
+        <Menu className="h-4 w-4" />
+      </Button>
 
       {/* Active entity badge / switcher */}
       <div className="relative" ref={ref}>
         <button
           onClick={() => setOpen(o => !o)}
-          className="flex items-center gap-2 rounded-md border bg-muted/50 hover:bg-muted px-2.5 h-8 transition-colors max-w-[200px]"
+          className="flex items-center gap-2 rounded-md border bg-muted/50 hover:bg-muted px-2.5 h-8 transition-colors max-w-[140px] sm:max-w-[200px]"
         >
           {active ? (
             <>
@@ -108,8 +115,8 @@ export function Header({ title }: HeaderProps) {
       {/* Page title */}
       {title && <h1 className="text-sm font-semibold text-foreground">{title}</h1>}
 
-      {/* Search */}
-      <div className="flex flex-1 items-center gap-2 ml-auto max-w-sm">
+      {/* Search — hidden on small screens */}
+      <div className="hidden sm:flex flex-1 items-center gap-2 ml-auto max-w-sm">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
@@ -118,6 +125,7 @@ export function Header({ title }: HeaderProps) {
           />
         </div>
       </div>
+      <div className="flex-1 sm:hidden" />
 
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" asChild>

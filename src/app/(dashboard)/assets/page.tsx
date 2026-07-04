@@ -189,7 +189,7 @@ export default function AssetsPage() {
   return (
     <div className="flex flex-col">
       <Header title="Assets" />
-      <div className="flex-1 p-6 animate-fade-in space-y-4">
+      <div className="flex-1 p-4 sm:p-6 animate-fade-in space-y-4">
 
         {/* Toolbar */}
         <div className="flex items-center gap-3 flex-wrap">

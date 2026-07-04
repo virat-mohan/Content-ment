@@ -63,7 +63,7 @@ export default function PromptsPage() {
   return (
     <div className="flex flex-col">
       <Header title="Prompts" />
-      <div className="flex-1 p-6 animate-fade-in space-y-4">
+      <div className="flex-1 p-4 sm:p-6 animate-fade-in space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap">
             {["all", ...PLATFORMS.slice(0,5), ...categories].map((f) => (

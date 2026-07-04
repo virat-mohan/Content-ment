@@ -215,6 +215,36 @@ export const knowledgeStore = {
   },
 };
 
+// ─── Brand Book (structured sections) ────────────────────────────────────────
+
+export interface BrandBook {
+  brandVoice: string;
+  targetAudience: string;
+  productsServices: string;
+  keyMessages: string;
+  competitors: string;
+  contentGuidelines: string;
+  about: string;
+  updatedAt: string;
+}
+
+const EMPTY_BRAND_BOOK: Omit<BrandBook, "updatedAt"> = {
+  brandVoice: "",
+  targetAudience: "",
+  productsServices: "",
+  keyMessages: "",
+  competitors: "",
+  contentGuidelines: "",
+  about: "",
+};
+
+export const brandBookStore = {
+  get: (entityId: string): BrandBook =>
+    get<BrandBook>(`cm_brandbook_${entityId}`, { ...EMPTY_BRAND_BOOK, updatedAt: "" }),
+  save: (entityId: string, book: BrandBook): void =>
+    set(`cm_brandbook_${entityId}`, book),
+};
+
 // ─── Assets ──────────────────────────────────────────────────────────────────
 
 export type AssetType = "image" | "video" | "document" | "other";

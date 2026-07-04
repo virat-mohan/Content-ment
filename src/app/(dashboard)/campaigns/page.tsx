@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  campaignStore, contentStore, entityStore, knowledgeStore, aiSettingsStore,
+  campaignStore, contentStore, entityStore, knowledgeStore, aiSettingsStore, brandBookStore,
   type Campaign, type ContentItem, type ContentPlatform,
   CONTENT_STATUS_LABELS, PLATFORM_CODE, generateContentId,
 } from "@/lib/store";
@@ -71,7 +71,8 @@ async function generateCampaignPlan(
 
   if (!apiKey) throw new Error("No AI API key configured. Add one in entity settings or Settings → AI.");
 
-  const systemPrompt = buildSystemPrompt(entity, knowledgeDocs);
+  const brandBook = brandBookStore.get(entity.id);
+  const systemPrompt = buildSystemPrompt(entity, knowledgeDocs, brandBook);
 
   const platformList = brief.platforms.map(p => `- ${p}`).join("\n");
   const pillarList = brief.pillars ? `Content pillars to cover:\n${brief.pillars.split(/[,\n]/).map(p => `- ${p.trim()}`).filter(Boolean).join("\n")}` : "";
@@ -313,7 +314,7 @@ export default function CampaignsPage() {
   return (
     <div className="flex flex-col">
       <Header title="Campaigns" />
-      <div className="flex-1 p-6 animate-fade-in space-y-4">
+      <div className="flex-1 p-4 sm:p-6 animate-fade-in space-y-4">
 
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">{campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""}</p>

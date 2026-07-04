@@ -370,7 +370,7 @@ export default function ImportPage() {
   return (
     <div className="flex flex-col">
       <Header title="Import" />
-      <div className="flex-1 p-6 animate-fade-in space-y-6 max-w-3xl">
+      <div className="flex-1 p-4 sm:p-6 animate-fade-in space-y-6 max-w-3xl">
 
         {/* Tab switcher */}
         <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
