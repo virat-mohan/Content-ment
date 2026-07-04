@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { entitySchema } from "@/lib/validations/entity";
 import { slugify } from "@/lib/utils";
@@ -10,11 +11,11 @@ interface RouteContext {
 
 export async function GET(_req: Request, { params }: RouteContext) {
   const { id } = await params;
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const entity = await prisma.entity.findUnique({ where: { id } });
-  if (!entity || entity.clerkUserId !== userId) {
+  if (!entity || entity.userId !== session.user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -23,11 +24,11 @@ export async function GET(_req: Request, { params }: RouteContext) {
 
 export async function PATCH(request: Request, { params }: RouteContext) {
   const { id } = await params;
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const entity = await prisma.entity.findUnique({ where: { id } });
-  if (!entity || entity.clerkUserId !== userId) {
+  if (!entity || entity.userId !== session.user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -49,9 +50,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const updated = await prisma.entity.update({
     where: { id },
     data: {
-      name,
-      slug,
-      type,
+      name, slug, type,
       description: description || null,
       website: website || null,
       industry: industry || null,
@@ -74,11 +73,11 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
 export async function DELETE(_req: Request, { params }: RouteContext) {
   const { id } = await params;
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const entity = await prisma.entity.findUnique({ where: { id } });
-  if (!entity || entity.clerkUserId !== userId) {
+  if (!entity || entity.userId !== session.user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

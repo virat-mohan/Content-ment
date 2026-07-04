@@ -1,6 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
+import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -12,15 +13,13 @@ import { EntityActions } from "@/components/entities/entity-actions";
 export const metadata = { title: "Entities" };
 
 export default async function EntitiesPage() {
-  const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/sign-in");
 
   const entities = await prisma.entity.findMany({
-    where: { clerkUserId: userId, isActive: true },
+    where: { userId: session.user.id, isActive: true },
     orderBy: { updatedAt: "desc" },
-    include: {
-      _count: { select: { contentItems: true } },
-    },
+    include: { _count: { select: { contentItems: true } } },
   });
 
   return (
@@ -28,11 +27,9 @@ export default async function EntitiesPage() {
       <Header title="Entities" />
       <div className="flex-1 p-6 animate-fade-in">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <p className="text-sm text-muted-foreground">
-              {entities.length} {entities.length === 1 ? "entity" : "entities"}
-            </p>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            {entities.length} {entities.length === 1 ? "entity" : "entities"}
+          </p>
           <Button size="sm" asChild>
             <Link href="/entities/new">
               <Plus className="mr-1.5 h-3.5 w-3.5" /> New Entity
@@ -48,7 +45,7 @@ export default async function EntitiesPage() {
             <div>
               <h3 className="text-sm font-semibold">No entities yet</h3>
               <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                An entity is an individual or business that you create and manage content for.
+                An entity is an individual or business you create content for.
               </p>
             </div>
             <Button size="sm" asChild>
@@ -79,19 +76,11 @@ export default async function EntitiesPage() {
                           {entity.name[0].toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <Link
-                            href={`/entities/${entity.slug}`}
-                            className="text-sm font-medium hover:underline truncate block"
-                          >
+                          <Link href={`/entities/${entity.slug}`} className="text-sm font-medium hover:underline truncate block">
                             {entity.name}
                           </Link>
                           {entity.website && (
-                            <a
-                              href={entity.website}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                            >
+                            <a href={entity.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                               <Globe className="h-3 w-3" />
                               <span className="truncate">{new URL(entity.website).hostname}</span>
                               <ExternalLink className="h-2.5 w-2.5" />

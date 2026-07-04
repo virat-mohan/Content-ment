@@ -1,24 +1,14 @@
-import { auth } from "@clerk/nextjs/server";
+import { getServerSession } from "next-auth";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import {
-  Pencil,
-  Globe,
-  Linkedin,
-  Twitter,
-  Instagram,
-  BookOpen,
-  FileText,
-  ExternalLink,
-  ChevronLeft,
-  Zap,
-} from "lucide-react";
+import { Pencil, Globe, BookOpen, FileText, ExternalLink, ChevronLeft, Zap } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -32,40 +22,33 @@ export async function generateMetadata({ params }: PageProps) {
 
 export default async function EntityPage({ params }: PageProps) {
   const { slug } = await params;
-  const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/sign-in");
 
   const entity = await prisma.entity.findUnique({
     where: { slug },
     include: {
       brandDNA: true,
-      _count: {
-        select: {
-          contentItems: true,
-          knowledgeItems: true,
-          assets: true,
-        },
-      },
+      _count: { select: { contentItems: true, knowledgeItems: true, assets: true } },
     },
   });
 
-  if (!entity || entity.clerkUserId !== userId) notFound();
+  if (!entity || entity.userId !== session.user.id) notFound();
 
   const socialHandles = [
-    { label: "LinkedIn", handle: entity.linkedinHandle, icon: Linkedin, url: `https://linkedin.com/in/${entity.linkedinHandle}` },
-    { label: "X", handle: entity.xHandle, icon: Twitter, url: `https://x.com/${entity.xHandle}` },
-    { label: "Instagram", handle: entity.instagramHandle, icon: Instagram, url: `https://instagram.com/${entity.instagramHandle}` },
-    { label: "Medium", handle: entity.mediumHandle, icon: BookOpen, url: `https://medium.com/@${entity.mediumHandle}` },
+    { label: "LinkedIn", handle: entity.linkedinHandle, url: `https://linkedin.com/in/${entity.linkedinHandle}` },
+    { label: "X", handle: entity.xHandle, url: `https://x.com/${entity.xHandle}` },
+    { label: "Instagram", handle: entity.instagramHandle, url: `https://instagram.com/${entity.instagramHandle}` },
+    { label: "Medium", handle: entity.mediumHandle, url: `https://medium.com/@${entity.mediumHandle}` },
+    { label: "Reddit", handle: entity.redditHandle, url: `https://reddit.com/u/${entity.redditHandle}` },
+    { label: "Quora", handle: entity.quoraHandle, url: `https://quora.com/profile/${entity.quoraHandle}` },
   ].filter((s) => s.handle);
 
   return (
     <div className="flex flex-col">
       <Header title={entity.name} />
       <div className="flex-1 p-6 animate-fade-in">
-        <Link
-          href="/entities"
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-6 w-fit"
-        >
+        <Link href="/entities" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-6 w-fit">
           <ChevronLeft className="h-3 w-3" /> Entities
         </Link>
 
@@ -81,9 +64,7 @@ export default async function EntityPage({ params }: PageProps) {
                   {entity.type === "INDIVIDUAL" ? "Individual" : "Business"}
                 </Badge>
               </div>
-              {entity.description && (
-                <p className="text-sm text-muted-foreground mt-0.5">{entity.description}</p>
-              )}
+              {entity.description && <p className="text-sm text-muted-foreground mt-0.5">{entity.description}</p>}
             </div>
           </div>
           <Button size="sm" variant="outline" asChild>
@@ -97,47 +78,32 @@ export default async function EntityPage({ params }: PageProps) {
           <Card>
             <CardContent className="pt-4">
               <div className="text-2xl font-semibold">{entity._count.contentItems}</div>
-              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                <FileText className="h-3 w-3" /> Content Items
-              </p>
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Content Items</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4">
               <div className="text-2xl font-semibold">{entity._count.knowledgeItems}</div>
-              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                <BookOpen className="h-3 w-3" /> Knowledge Items
-              </p>
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><BookOpen className="h-3 w-3" /> Knowledge Items</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4">
               <div className="text-2xl font-semibold">{entity._count.assets}</div>
-              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                <FileText className="h-3 w-3" /> Assets
-              </p>
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Assets</p>
             </CardContent>
           </Card>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold">Details</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-sm font-semibold">Details</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {entity.website && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">Website</span>
-                  <a
-                    href={entity.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs hover:underline"
-                  >
-                    <Globe className="h-3 w-3" />
-                    {new URL(entity.website).hostname}
-                    <ExternalLink className="h-2.5 w-2.5" />
+                  <a href={entity.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs hover:underline">
+                    <Globe className="h-3 w-3" />{new URL(entity.website).hostname}<ExternalLink className="h-2.5 w-2.5" />
                   </a>
                 </div>
               )}
@@ -170,24 +136,13 @@ export default async function EntityPage({ params }: PageProps) {
 
           {socialHandles.length > 0 && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold">Social Profiles</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-sm font-semibold">Social Profiles</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                {socialHandles.map(({ label, handle, icon: Icon, url }) => (
+                {socialHandles.map(({ label, handle, url }) => (
                   <div key={label} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">{label}</span>
-                    </div>
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs hover:underline"
-                    >
-                      @{handle}
-                      <ExternalLink className="h-2.5 w-2.5" />
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs hover:underline">
+                      @{handle}<ExternalLink className="h-2.5 w-2.5" />
                     </a>
                   </div>
                 ))}

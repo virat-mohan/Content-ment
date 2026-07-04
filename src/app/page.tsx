@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Zap } from "lucide-react";
 
 export default async function HomePage() {
-  const { userId } = await auth();
-  if (userId) redirect("/dashboard");
+  const session = await getServerSession(authOptions);
+  if (session) redirect("/dashboard");
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4">

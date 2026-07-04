@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { entitySchema } from "@/lib/validations/entity";
 import { slugify } from "@/lib/utils";
 
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const entities = await prisma.entity.findMany({
-    where: { clerkUserId: userId, isActive: true },
+    where: { userId: session.user.id, isActive: true },
     orderBy: { updatedAt: "desc" },
   });
 
@@ -17,8 +18,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
   const result = entitySchema.safeParse(body);
@@ -34,10 +35,8 @@ export async function POST(request: Request) {
 
   const entity = await prisma.entity.create({
     data: {
-      clerkUserId: userId,
-      name,
-      slug,
-      type,
+      userId: session.user.id,
+      name, slug, type,
       description: description || null,
       website: website || null,
       industry: industry || null,

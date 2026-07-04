@@ -1,6 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
+import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -8,18 +9,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, FileText, Plus, ArrowRight, TrendingUp } from "lucide-react";
 
 export default async function DashboardPage() {
-  const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/sign-in");
+
+  const userId = session.user.id;
 
   const [entityCount, contentCount] = await Promise.all([
-    prisma.entity.count({ where: { clerkUserId: userId, isActive: true } }),
-    prisma.contentItem.count({
-      where: { entity: { clerkUserId: userId } },
-    }),
+    prisma.entity.count({ where: { userId, isActive: true } }),
+    prisma.contentItem.count({ where: { entity: { userId } } }),
   ]);
 
   const recentEntities = await prisma.entity.findMany({
-    where: { clerkUserId: userId, isActive: true },
+    where: { userId, isActive: true },
     orderBy: { updatedAt: "desc" },
     take: 3,
     select: { id: true, name: true, type: true, industry: true, slug: true },

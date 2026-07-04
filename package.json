@@ -12,7 +12,7 @@
     "db:generate": "prisma generate"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.12.0",
+    "@auth/prisma-adapter": "^2.7.2",
     "@hookform/resolvers": "^3.9.0",
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-alert-dialog": "^1.1.4",
@@ -32,9 +32,11 @@
     "@tanstack/react-table": "^8.21.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "bcryptjs": "^2.4.3",
     "framer-motion": "^12.4.7",
     "lucide-react": "^0.469.0",
     "next": "15.1.7",
+    "next-auth": "^4.24.11",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.2",
@@ -43,6 +45,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
