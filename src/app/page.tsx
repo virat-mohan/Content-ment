@@ -71,6 +71,22 @@ export default function LandingPage() {
   const d = theme === "dark";
   const v = useVars(d);
 
+  /* scroll reveal */
+  useEffect(() => {
+    const els = document.querySelectorAll<HTMLElement>(".reveal");
+    if (!els.length) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e, i) => {
+        if (e.isIntersecting) {
+          setTimeout(() => (e.target as HTMLElement).classList.add("in"), i * 60);
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.05 });
+    els.forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, [splashGone]);
+
   /* hero grid canvas */
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -496,14 +512,6 @@ export default function LandingPage() {
 
       </div>
 
-      <script dangerouslySetInnerHTML={{ __html: `
-        document.querySelectorAll('.reveal').forEach(el => {
-          const io = new IntersectionObserver(entries => {
-            entries.forEach((e,i) => { if(e.isIntersecting){ setTimeout(()=>e.target.classList.add('in'),i*60); io.unobserve(e.target); } });
-          },{threshold:.1});
-          io.observe(el);
-        });
-      `}} />
     </>
   );
 }
