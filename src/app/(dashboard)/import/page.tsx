@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TableProperties, Download, CheckCircle, AlertCircle, Loader2, Info, Upload, FileSpreadsheet, ClipboardPaste } from "lucide-react";
+import { TableProperties, Download, CheckCircle, AlertCircle, Loader2, Info, Upload, FileSpreadsheet, ClipboardPaste, Layers } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ParsedRow {
@@ -42,6 +42,11 @@ const STATUS_ALIASES: Record<string, ContentStatus> = {
 };
 
 const PLATFORMS: ContentPlatform[] = ["linkedin", "twitter", "instagram", "blog", "youtube", "email", "other"];
+
+const PLATFORM_LABELS: Record<string, string> = {
+  linkedin: "LinkedIn", twitter: "Twitter / X", instagram: "Instagram",
+  blog: "Blog", youtube: "YouTube", email: "Email", other: "Other",
+};
 
 function toSheetCsvUrl(input: string): string | null {
   const trimmed = input.trim();
@@ -140,7 +145,9 @@ export default function ImportPage() {
   const [tab, setTab] = useState<Tab>("sheets");
   const [entities, setEntities] = useState<Entity[]>([]);
   const [entityId, setEntityId] = useState("");
-  const [defaultPlatform, setDefaultPlatform] = useState<string>("other");
+  const [defaultPlatform, setDefaultPlatform] = useState<string>("linkedin");
+  // platforms to expand into on import (multi-select)
+  const [selectedPlatforms, setSelectedPlatforms] = useState<ContentPlatform[]>(["linkedin"]);
 
   // Sheets state
   const [url, setUrl] = useState("");
@@ -279,26 +286,44 @@ export default function ImportPage() {
     }
   }
 
+  function togglePlatform(p: ContentPlatform) {
+    setSelectedPlatforms(prev =>
+      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+    );
+  }
+
   // ── Import confirmed ─────────────────────────────────────
+  // If the data has a platform column → use it (1 item per row)
+  // If no platform column   → expand: 1 item per row × each selected platform
   function doImport() {
     const now = new Date().toISOString();
-    const items: ContentItem[] = preview.map((row) => ({
-      id: generateId(),
-      entityId,
-      title: row.title,
-      body: row.body,
-      platform: (PLATFORM_ALIASES[row.platform.toLowerCase()] ?? "other") as ContentPlatform,
-      status: (STATUS_ALIASES[row.status.toLowerCase()] ?? "draft") as ContentStatus,
-      scheduledAt: row.scheduledAt ? (() => { try { return new Date(row.scheduledAt).toISOString(); } catch { return undefined; } })() : undefined,
-      tags: row.tags ? row.tags.split(/[,;|]/).map((t) => t.trim()).filter(Boolean) : [],
-      notes: row.notes,
-      importSource,
-      createdAt: now,
-      updatedAt: now,
-    }));
+    const platformsToUse = hasPlatformData ? null : (selectedPlatforms.length ? selectedPlatforms : ["other" as ContentPlatform]);
+    const items: ContentItem[] = [];
+
+    for (const row of preview) {
+      const rowPlatforms = platformsToUse ?? [(PLATFORM_ALIASES[row.platform.toLowerCase()] ?? "other") as ContentPlatform];
+      for (const platform of rowPlatforms) {
+        items.push({
+          id: generateId(),
+          entityId,
+          title: row.title,
+          body: row.body,
+          platform,
+          status: (STATUS_ALIASES[row.status.toLowerCase()] ?? "draft") as ContentStatus,
+          scheduledAt: row.scheduledAt ? (() => { try { return new Date(row.scheduledAt).toISOString(); } catch { return undefined; } })() : undefined,
+          tags: row.tags ? row.tags.split(/[,;|]/).map((t) => t.trim()).filter(Boolean) : [],
+          notes: row.notes,
+          importSource,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+
     contentStore.saveMany(items);
     setImported(true);
-    toast({ title: `${items.length} item${items.length !== 1 ? "s" : ""} imported` });
+    const platformList = platformsToUse ? platformsToUse.join(", ") : "detected platforms";
+    toast({ title: `${items.length} items imported`, description: `${preview.length} hooks × ${platformsToUse?.length ?? 1} platform${(platformsToUse?.length ?? 1) !== 1 ? "s" : ""} (${platformList})` });
   }
 
   const COLUMNS = ["title / headline / working title / hook", "body / content / copy", "platform / channel", "status", "scheduledAt / date", "tags / pillar / category", "notes / id"];
@@ -325,26 +350,15 @@ export default function ImportPage() {
           ))}
         </div>
 
-        {/* Entity + default platform (shared) */}
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Label className="text-xs shrink-0">Import to</Label>
-            <Select value={entityId} onValueChange={setEntityId}>
-              <SelectTrigger className="w-44 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Label className="text-xs shrink-0">Default platform</Label>
-            <Select value={defaultPlatform} onValueChange={setDefaultPlatform}>
-              <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PLATFORMS.map(p => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+        {/* Entity picker (shared) */}
+        <div className="flex items-center gap-2">
+          <Label className="text-xs shrink-0">Import to</Label>
+          <Select value={entityId} onValueChange={setEntityId}>
+            <SelectTrigger className="w-44 h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* ── Google Sheets tab ── */}
@@ -476,23 +490,50 @@ export default function ImportPage() {
         {/* ── Preview (shared) ── */}
         {preview.length > 0 && (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between py-3">
-              <div>
+            <CardHeader className="space-y-3 pb-3">
+              <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold">
-                  Preview — {preview.length} row{preview.length !== 1 ? "s" : ""} ready to import
+                  Preview — {preview.length} hook{preview.length !== 1 ? "s" : ""} ready to import
                 </CardTitle>
-                {!hasPlatformData && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">No platform column detected — using default: <span className="font-medium capitalize">{defaultPlatform}</span></p>
+                {imported ? (
+                  <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 font-medium">
+                    <CheckCircle className="h-3.5 w-3.5" /> Imported
+                  </span>
+                ) : (
+                  <Button size="sm" className="h-7 text-xs" onClick={doImport} disabled={!hasPlatformData && selectedPlatforms.length === 0}>
+                    <Download className="mr-1.5 h-3.5 w-3.5" />
+                    Import {hasPlatformData ? preview.length : preview.length * selectedPlatforms.length} items
+                  </Button>
                 )}
               </div>
-              {imported ? (
-                <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 font-medium">
-                  <CheckCircle className="h-3.5 w-3.5" /> Imported
-                </span>
-              ) : (
-                <Button size="sm" className="h-7 text-xs" onClick={doImport}>
-                  <Download className="mr-1.5 h-3.5 w-3.5" /> Import {preview.length} items
-                </Button>
+
+              {/* Platform selector — only shown when data has no platform column */}
+              {!hasPlatformData && !imported && (
+                <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-medium">
+                    <Layers className="h-3.5 w-3.5" /> Plan for which platforms?
+                    <span className="text-muted-foreground font-normal ml-1">Each hook will create one draft per selected platform.</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {PLATFORMS.filter(p => p !== "other").map(p => {
+                      const active = selectedPlatforms.includes(p);
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => togglePlatform(p)}
+                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${active ? "bg-foreground text-background border-foreground" : "bg-background text-muted-foreground border-border hover:border-foreground/40"}`}
+                        >
+                          {PLATFORM_LABELS[p]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedPlatforms.length > 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {preview.length} hooks × {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? "s" : ""} = <strong className="text-foreground">{preview.length * selectedPlatforms.length} content items</strong>
+                    </p>
+                  )}
+                </div>
               )}
             </CardHeader>
             <CardContent className="p-0">
