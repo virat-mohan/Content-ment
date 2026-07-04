@@ -82,10 +82,18 @@ export const CONTENT_STATUS_LABELS: Record<ContentStatus, string> = {
   archived: "Archived",
 };
 
+export const PLATFORM_CODE: Record<ContentPlatform, string> = {
+  linkedin: "LI", twitter: "TW", instagram: "IG",
+  blog: "BL", youtube: "YT", email: "EM", other: "OT",
+};
+
 export interface ContentItem {
   id: string;
+  contentId: string;    // human-readable e.g. AJ-001-LI
   entityId: string;
-  title: string;
+  pillar: string;       // content pillar / category
+  hook: string;         // the hook / angle (short)
+  title: string;        // working title (may equal hook)
   body: string;
   platform: ContentPlatform;
   status: ContentStatus;
@@ -99,6 +107,24 @@ export interface ContentItem {
   approvedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export function generateContentId(entityName: string, platform: ContentPlatform, existing: ContentItem[]): string {
+  const initials = entityName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+  const code = PLATFORM_CODE[platform];
+  const prefix = `${initials}-`;
+  const nums = existing
+    .map((c) => {
+      const m = c.contentId?.match(new RegExp(`^${prefix}(\\d+)-${code}$`));
+      return m ? parseInt(m[1], 10) : 0;
+    })
+    .filter((n) => n > 0);
+  const next = nums.length ? Math.max(...nums) + 1 : 1;
+  return `${prefix}${String(next).padStart(3, "0")}-${code}`;
 }
 
 export const contentStore = {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { entityStore, contentStore, type Entity, type ContentItem, type ContentPlatform, type ContentStatus } from "@/lib/store";
+import { entityStore, contentStore, type Entity, type ContentItem, type ContentPlatform, type ContentStatus, PLATFORM_CODE } from "@/lib/store";
 import { getActiveEntityId } from "@/lib/active-entity";
 import { generateId } from "@/lib/id";
 import { Header } from "@/components/layout/header";
@@ -15,6 +15,9 @@ import { TableProperties, Download, CheckCircle, AlertCircle, Loader2, Info, Upl
 import { useToast } from "@/hooks/use-toast";
 
 interface ParsedRow {
+  sourceId: string;   // original ID from sheet (e.g. "1", "AJ-001")
+  pillar: string;
+  hook: string;
   title: string;
   body: string;
   platform: string;
@@ -95,28 +98,30 @@ function normalizeHeader(h: string): string {
   return h.toLowerCase().replace(/[\s_\-\/\.]+/g, "").replace(/[^a-z0-9]/g, "");
 }
 
-// Expanded header map — covers "Working Title / Hook", "Pillar", "ID" etc.
 const HEADER_MAP: Record<string, keyof ParsedRow> = {
-  // title variants
+  // source ID — used to build contentId with platform suffix
+  id: "sourceId", contentid: "sourceId", ref: "sourceId", code: "sourceId", unitid: "sourceId",
+  // pillar
+  pillar: "pillar", category: "pillar", series: "pillar", theme: "pillar",
+  // hook — the actual hook text; "Working Title / Hook" maps here
+  hook: "hook", workingtitle: "hook", workingtitlehook: "hook", angle: "hook",
+  // title (working title when separate from hook)
   title: "title", headline: "title", name: "title", subject: "title",
-  workingtitle: "title", workingtitlehook: "title", hook: "title",
   topic: "title", posttitle: "title", contenttitle: "title",
-  // body variants
+  // body
   body: "body", content: "body", copy: "body", text: "body",
   post: "body", caption: "body", script: "body", draft: "body",
-  // platform variants
+  // platform
   platform: "platform", channel: "platform", network: "platform", type: "platform",
-  // status variants
+  // status
   status: "status", state: "status", stage: "status",
-  // date variants
+  // date
   scheduledat: "scheduledAt", scheduled: "scheduledAt", date: "scheduledAt",
   publishdate: "scheduledAt", publishedat: "scheduledAt", goliveon: "scheduledAt",
-  // tags — "Pillar" maps here
+  // tags (additional, not pillar)
   tags: "tags", tag: "tags", labels: "tags", label: "tags",
-  pillar: "tags", category: "tags", series: "tags", theme: "tags",
-  // notes — "ID" maps here
+  // notes
   notes: "notes", note: "notes", comments: "notes", remarks: "notes",
-  id: "notes", contentid: "notes", ref: "notes", code: "notes",
 };
 
 function rowsToPreview(rows: string[][], defaultPlatform = "other"): ParsedRow[] {
@@ -124,7 +129,7 @@ function rowsToPreview(rows: string[][], defaultPlatform = "other"): ParsedRow[]
   const headers = rows[0].map(normalizeHeader);
   const hasPlatformCol = headers.some(h => HEADER_MAP[h] === "platform");
   return rows.slice(1).map((row) => {
-    const obj: ParsedRow = { title: "", body: "", platform: defaultPlatform, status: "", scheduledAt: "", tags: "", notes: "" };
+    const obj: ParsedRow = { sourceId: "", pillar: "", hook: "", title: "", body: "", platform: defaultPlatform, status: "", scheduledAt: "", tags: "", notes: "" };
     headers.forEach((h, i) => {
       const field = HEADER_MAP[h];
       if (field) {
@@ -135,9 +140,12 @@ function rowsToPreview(rows: string[][], defaultPlatform = "other"): ParsedRow[]
       }
     });
     if (!hasPlatformCol) obj.platform = defaultPlatform;
+    // if only hook was mapped (no separate title column), use hook as title too
+    if (!obj.title && obj.hook) obj.title = obj.hook;
     if (!obj.title) obj.title = (row[0] ?? "").toString().trim();
+    if (!obj.hook) obj.hook = obj.title;
     return obj;
-  }).filter((r) => r.title);
+  }).filter((r) => r.title || r.hook);
 }
 
 type Tab = "sheets" | "file" | "paste";
@@ -298,20 +306,46 @@ export default function ImportPage() {
   }
 
   // ── Import confirmed ─────────────────────────────────────
-  // If the data has a platform column → use it (1 item per row)
-  // If no platform column   → expand: 1 item per row × each selected platform
   function doImport() {
     const now = new Date().toISOString();
     const platformsToUse = hasPlatformData ? null : (selectedPlatforms.length ? selectedPlatforms : ["other" as ContentPlatform]);
+    const entity = entityStore.getAll().find(e => e.id === entityId);
+    const entityInitials = entity
+      ? entity.name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("")
+      : "XX";
     const items: ContentItem[] = [];
+
+    // Track per-platform sequence for generating content IDs
+    const seqMap: Record<string, number> = {};
+    const existing = contentStore.getAll();
 
     for (const row of preview) {
       const rowPlatforms = platformsToUse ?? [(PLATFORM_ALIASES[row.platform.toLowerCase()] ?? "other") as ContentPlatform];
       for (const platform of rowPlatforms) {
+        const code = PLATFORM_CODE[platform] ?? "OT";
+        // Build contentId: prefer sourceId from sheet, else auto-sequence
+        let contentId: string;
+        if (row.sourceId) {
+          contentId = `${row.sourceId}-${code}`;
+        } else {
+          const seqKey = `${entityInitials}-${code}`;
+          if (!seqMap[seqKey]) {
+            const existingNums = existing
+              .map(c => { const m = c.contentId?.match(new RegExp(`^${entityInitials}-(\\d+)-${code}$`)); return m ? parseInt(m[1], 10) : 0; })
+              .filter(n => n > 0);
+            seqMap[seqKey] = existingNums.length ? Math.max(...existingNums) : 0;
+          }
+          seqMap[seqKey]++;
+          contentId = `${entityInitials}-${String(seqMap[seqKey]).padStart(3, "0")}-${code}`;
+        }
+
         items.push({
           id: generateId(),
+          contentId,
           entityId,
-          title: row.title,
+          pillar: row.pillar ?? "",
+          hook: row.hook || row.title,
+          title: row.title || row.hook,
           body: row.body,
           platform,
           status: (STATUS_ALIASES[row.status.toLowerCase()] ?? "not_started") as ContentStatus,
@@ -331,7 +365,7 @@ export default function ImportPage() {
     toast({ title: `${items.length} items imported`, description: `${preview.length} hooks × ${platformsToUse?.length ?? 1} platform${(platformsToUse?.length ?? 1) !== 1 ? "s" : ""} (${platformList})` });
   }
 
-  const COLUMNS = ["title / headline / working title / hook", "body / content / copy", "platform / channel", "status", "scheduledAt / date", "tags / pillar / category", "notes / id"];
+  const COLUMNS = ["id / unitid / ref (→ content ID prefix)", "pillar / category / series", "hook / working title (→ hook & title)", "body / content", "platform / channel", "status / stage", "scheduledAt / date", "tags"];
 
   return (
     <div className="flex flex-col">
@@ -546,23 +580,23 @@ export default function ImportPage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b bg-muted/30">
-                      <th className="px-4 py-2 text-left font-medium text-muted-foreground">Title</th>
+                      <th className="px-4 py-2 text-left font-medium text-muted-foreground hidden sm:table-cell">ID</th>
+                      <th className="px-4 py-2 text-left font-medium text-muted-foreground hidden md:table-cell">Pillar</th>
+                      <th className="px-4 py-2 text-left font-medium text-muted-foreground">Hook / Title</th>
                       <th className="px-4 py-2 text-left font-medium text-muted-foreground hidden sm:table-cell">Platform</th>
-                      <th className="px-4 py-2 text-left font-medium text-muted-foreground hidden sm:table-cell">Tags / Pillar</th>
                       <th className="px-4 py-2 text-left font-medium text-muted-foreground">Status</th>
-                      <th className="px-4 py-2 text-left font-medium text-muted-foreground hidden md:table-cell">Notes / ID</th>
                     </tr>
                   </thead>
                   <tbody>
                     {preview.slice(0, 25).map((row, i) => (
                       <tr key={i} className="border-b last:border-0 hover:bg-muted/20">
-                        <td className="px-4 py-2.5 font-medium truncate max-w-[220px]">{row.title}</td>
+                        <td className="px-4 py-2.5 hidden sm:table-cell font-mono text-muted-foreground">{row.sourceId || "—"}</td>
+                        <td className="px-4 py-2.5 hidden md:table-cell text-muted-foreground truncate max-w-[100px]">{row.pillar || "—"}</td>
+                        <td className="px-4 py-2.5 font-medium truncate max-w-[220px]">{row.hook || row.title}</td>
                         <td className="px-4 py-2.5 hidden sm:table-cell">
                           <Badge variant="secondary" className="text-[10px] capitalize">{row.platform || "other"}</Badge>
                         </td>
-                        <td className="px-4 py-2.5 hidden sm:table-cell text-muted-foreground truncate max-w-[160px]">{row.tags}</td>
                         <td className="px-4 py-2.5 capitalize text-muted-foreground">{row.status || "not started"}</td>
-                        <td className="px-4 py-2.5 hidden md:table-cell text-muted-foreground truncate max-w-[120px]">{row.notes}</td>
                       </tr>
                     ))}
                   </tbody>
