@@ -75,11 +75,8 @@ export default function LandingPage() {
       {/* Nav */}
       <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 32px", height: 60, background: `${v("bg")}dd`, backdropFilter: "blur(16px)", borderBottom: `1px solid ${v("border")}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <svg width="28" height="28" viewBox="0 0 30 30" fill="none">
-            <rect width="30" height="30" rx="7" fill={v("text")} />
-            <path d="M20 10C18.4 9 16.6 8.5 15 8.5C10.9 8.5 8 11.3 8 15C8 18.7 10.9 21.5 15 21.5C16.6 21.5 18.4 21 20 20" stroke={v("accentFg")} strokeWidth="2" strokeLinecap="round" />
-            <circle cx="21.5" cy="15" r="1.8" fill={v("silver")} />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Content-ment" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }} />
           <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: "-.3px" }}>Content<span style={{ color: v("text3"), fontWeight: 400 }}>·ment</span></span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -96,7 +93,11 @@ export default function LandingPage() {
       <section style={{ position: "relative", overflow: "hidden", padding: "96px 32px 72px", textAlign: "center" }}>
         <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, pointerEvents: "none", width: "100%", height: "100%" }} />
 
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "'SF Mono','Fira Code',monospace", fontSize: 11, letterSpacing: ".08em", color: v("text3"), background: v("surface"), border: `1px solid ${v("border")}`, padding: "5px 12px", borderRadius: 20, marginBottom: 32 }}>
+        {/* Logo hero mark */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="Content-ment logo" style={{ width: 120, height: 120, borderRadius: 24, objectFit: "cover", margin: "0 auto 32px", display: "block", boxShadow: d ? "0 8px 40px rgba(0,0,0,.6)" : "0 8px 40px rgba(0,0,0,.15)" }} />
+
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "'SF Mono','Fira Code',monospace", fontSize: 11, letterSpacing: ".08em", color: v("text3"), background: v("surface"), border: `1px solid ${v("border")}`, padding: "5px 12px", borderRadius: 20, marginBottom: 28 }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: v("silver"), display: "inline-block", animation: "pulse 2.5s ease-in-out infinite" }} />
           Trial mode · No account required
         </div>
@@ -220,7 +221,8 @@ export default function LandingPage() {
       <div style={{ borderTop: `1px solid ${v("border")}` }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <svg width="20" height="20" viewBox="0 0 30 30" fill="none"><rect width="30" height="30" rx="6" fill={v("text")} /><path d="M20 10C18.4 9 16.6 8.5 15 8.5C10.9 8.5 8 11.3 8 15C8 18.7 10.9 21.5 15 21.5C16.6 21.5 18.4 21 20 20" stroke={v("accentFg")} strokeWidth="2" strokeLinecap="round" /><circle cx="21.5" cy="15" r="1.8" fill={v("silver")} /></svg>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="Content-ment" style={{ width: 24, height: 24, borderRadius: 5, objectFit: "cover" }} />
             <span style={{ fontSize: 13, color: v("text3") }}>Content-ment · Trial mode</span>
           </div>
           <div style={{ display: "flex", gap: 20 }}>
