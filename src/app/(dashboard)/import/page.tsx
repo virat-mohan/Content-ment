@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { entityStore, contentStore, type Entity, type ContentItem, type ContentPlatform, type ContentStatus } from "@/lib/store";
 import { generateId } from "@/lib/id";
 import { Header } from "@/components/layout/header";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TableProperties, Download, CheckCircle, AlertCircle, Loader2, Info } from "lucide-react";
+import { TableProperties, Download, CheckCircle, AlertCircle, Loader2, Info, Upload, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ParsedRow {
@@ -43,19 +43,12 @@ const STATUS_ALIASES: Record<string, ContentStatus> = {
 
 function toSheetCsvUrl(input: string): string | null {
   const trimmed = input.trim();
-
-  // Already a direct CSV export URL
   if (trimmed.includes("export?format=csv") || trimmed.includes("output=csv")) return trimmed;
-
-  // Extract spreadsheet ID
   const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
   if (!match) return null;
   const id = match[1];
-
-  // Extract gid (sheet tab) if present — omit entirely if not found (avoids 400 on default tab)
   const gidMatch = trimmed.match(/[#&?]gid=(\d+)/);
   const gidParam = gidMatch ? `&gid=${gidMatch[1]}` : "";
-
   return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&single=true${gidParam}`;
 }
 
@@ -64,7 +57,6 @@ function parseCsv(text: string): string[][] {
   let row: string[] = [];
   let cell = "";
   let inQuotes = false;
-
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (ch === '"') {
@@ -86,7 +78,7 @@ function parseCsv(text: string): string[][] {
 }
 
 function normalizeHeader(h: string): string {
-  return h.toLowerCase().replace(/[\s_-]+/g, "");
+  return h.toLowerCase().replace(/[\s_\-]+/g, "");
 }
 
 const HEADER_MAP: Record<string, keyof ParsedRow> = {
@@ -99,16 +91,44 @@ const HEADER_MAP: Record<string, keyof ParsedRow> = {
   notes: "notes", note: "notes", comments: "notes",
 };
 
+function rowsToPreview(rows: string[][]): ParsedRow[] {
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(normalizeHeader);
+  return rows.slice(1).map((row) => {
+    const obj: ParsedRow = { title: "", body: "", platform: "", status: "", scheduledAt: "", tags: "", notes: "" };
+    headers.forEach((h, i) => {
+      const field = HEADER_MAP[h];
+      if (field) obj[field] = (row[i] ?? "").toString().trim();
+    });
+    if (!obj.title) obj.title = (row[0] ?? "").toString().trim();
+    return obj;
+  }).filter((r) => r.title);
+}
+
+type Tab = "sheets" | "file";
+
 export default function ImportPage() {
   const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [tab, setTab] = useState<Tab>("sheets");
   const [entities, setEntities] = useState<Entity[]>([]);
-  const [url, setUrl] = useState("");
   const [entityId, setEntityId] = useState("");
+
+  // Sheets state
+  const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [preview, setPreview] = useState<ParsedRow[]>([]);
+  const [sheetsError, setSheetsError] = useState("");
   const [csvUrl, setCsvUrl] = useState("");
+
+  // File state
+  const [fileName, setFileName] = useState("");
+  const [fileError, setFileError] = useState("");
+  const [fileDragging, setFileDragging] = useState(false);
+
+  // Shared
+  const [preview, setPreview] = useState<ParsedRow[]>([]);
   const [imported, setImported] = useState(false);
+  const [importSource, setImportSource] = useState("");
 
   useEffect(() => {
     const all = entityStore.getAll();
@@ -116,48 +136,95 @@ export default function ImportPage() {
     if (all.length) setEntityId(all[0].id);
   }, []);
 
+  // ── Google Sheets fetch ──────────────────────────────────
   async function fetchSheet() {
-    setError(""); setPreview([]); setImported(false);
+    setSheetsError(""); setPreview([]); setImported(false);
     const exportUrl = toSheetCsvUrl(url.trim());
     if (!exportUrl) {
-      setError("Paste a valid Google Sheets URL (e.g. https://docs.google.com/spreadsheets/d/…)");
+      setSheetsError("Paste a valid Google Sheets URL (e.g. https://docs.google.com/spreadsheets/d/…)");
       return;
     }
-    if (!entityId) {
-      setError("Select an entity first.");
-      return;
-    }
-
+    if (!entityId) { setSheetsError("Select an entity first."); return; }
     setLoading(true);
     setCsvUrl(exportUrl);
-
     try {
       const res = await fetch(`/api/sheets/proxy?url=${encodeURIComponent(exportUrl)}`);
       if (!res.ok) throw new Error(await res.text());
       const text = await res.text();
       const rows = parseCsv(text);
       if (rows.length < 2) throw new Error("Sheet appears empty or has no data rows.");
-
-      const headers = rows[0].map(normalizeHeader);
-      const parsed: ParsedRow[] = rows.slice(1).map((row) => {
-        const obj: ParsedRow = { title: "", body: "", platform: "", status: "", scheduledAt: "", tags: "", notes: "" };
-        headers.forEach((h, i) => {
-          const field = HEADER_MAP[h];
-          if (field) obj[field] = row[i]?.trim() ?? "";
-        });
-        if (!obj.title) obj.title = row[0]?.trim() ?? "";
-        return obj;
-      }).filter((r) => r.title);
-
+      const parsed = rowsToPreview(rows);
       if (!parsed.length) throw new Error("No rows with a title found. Make sure row 1 is a header row.");
       setPreview(parsed);
+      setImportSource(exportUrl);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to fetch sheet");
+      setSheetsError(e instanceof Error ? e.message : "Failed to fetch sheet");
     } finally {
       setLoading(false);
     }
   }
 
+  // ── File upload (CSV or Excel) ───────────────────────────
+  async function handleFile(file: File) {
+    setFileError(""); setPreview([]); setImported(false);
+    if (!entityId) { setFileError("Select an entity first."); return; }
+
+    const name = file.name.toLowerCase();
+    const isXlsx = name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".xlsm");
+    const isCsv  = name.endsWith(".csv") || name.endsWith(".tsv");
+
+    if (!isXlsx && !isCsv) {
+      setFileError("Only .csv, .tsv, .xlsx, .xls files are supported.");
+      return;
+    }
+
+    setFileName(file.name);
+
+    try {
+      let rows: string[][];
+
+      if (isCsv) {
+        const text = await file.text();
+        const sep = name.endsWith(".tsv") ? "\t" : ",";
+        if (sep === "\t") {
+          // Simple TSV split
+          rows = text.split(/\r?\n/).filter(Boolean).map(r => r.split("\t"));
+        } else {
+          rows = parseCsv(text);
+        }
+      } else {
+        // Excel — dynamic import to avoid SSR issues
+        const XLSX = await import("xlsx");
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const raw: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+        rows = raw.map(r => r.map(c => String(c ?? "")));
+      }
+
+      if (rows.length < 2) throw new Error("File appears empty or has no data rows.");
+      const parsed = rowsToPreview(rows);
+      if (!parsed.length) throw new Error("No rows with a title found. Make sure row 1 is a header row.");
+      setPreview(parsed);
+      setImportSource(`file:${file.name}`);
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : "Failed to read file");
+    }
+  }
+
+  function onFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+    e.target.value = "";
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault(); setFileDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  }
+
+  // ── Import confirmed ─────────────────────────────────────
   function doImport() {
     const now = new Date().toISOString();
     const items: ContentItem[] = preview.map((row) => ({
@@ -167,83 +234,136 @@ export default function ImportPage() {
       body: row.body,
       platform: (PLATFORM_ALIASES[row.platform.toLowerCase()] ?? "other") as ContentPlatform,
       status: (STATUS_ALIASES[row.status.toLowerCase()] ?? "draft") as ContentStatus,
-      scheduledAt: row.scheduledAt ? new Date(row.scheduledAt).toISOString() : undefined,
+      scheduledAt: row.scheduledAt ? (() => { try { return new Date(row.scheduledAt).toISOString(); } catch { return undefined; } })() : undefined,
       tags: row.tags ? row.tags.split(/[,;|]/).map((t) => t.trim()).filter(Boolean) : [],
       notes: row.notes,
-      importSource: csvUrl,
+      importSource,
       createdAt: now,
       updatedAt: now,
     }));
     contentStore.saveMany(items);
     setImported(true);
-    toast({ title: `${items.length} items imported to Content` });
+    toast({ title: `${items.length} item${items.length !== 1 ? "s" : ""} imported to Content` });
   }
+
+  const COLUMNS = ["title / headline", "body / content / copy", "platform / channel", "status", "scheduledAt / date", "tags", "notes"];
 
   return (
     <div className="flex flex-col">
       <Header title="Import" />
       <div className="flex-1 p-6 animate-fade-in space-y-6 max-w-3xl">
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <TableProperties className="h-4 w-4" /> Import from Google Sheets
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Instructions */}
-            <div className="rounded-lg bg-muted/50 border px-4 py-3 text-xs text-muted-foreground space-y-1.5">
-              <p className="flex items-center gap-1.5 font-medium text-foreground"><Info className="h-3.5 w-3.5" /> How to set up your sheet</p>
-              <p>1. Make the sheet <strong>publicly viewable</strong>: Share → Anyone with the link → Viewer.</p>
-              <p>2. Row 1 must be a header row. Recognised columns (case-insensitive):</p>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {["title / headline", "body / content / copy", "platform / channel", "status", "scheduledAt / date", "tags", "notes"].map((c) => (
-                  <span key={c} className="rounded bg-background border px-1.5 py-0.5 font-mono text-[10px]">{c}</span>
-                ))}
-              </div>
-              <p>3. Paste the sheet URL below and click Fetch.</p>
-            </div>
+        {/* Tab switcher */}
+        <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
+          {([["sheets", "Google Sheets", TableProperties], ["file", "CSV / Excel", FileSpreadsheet]] as const).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              onClick={() => { setTab(id); setPreview([]); setImported(false); }}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${tab === id ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Icon className="h-3.5 w-3.5" /> {label}
+            </button>
+          ))}
+        </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label className="text-xs">Google Sheet URL</Label>
-                <Input
-                  className="text-xs h-8"
-                  placeholder="https://docs.google.com/spreadsheets/d/…"
-                  value={url}
-                  onChange={(e) => { setUrl(e.target.value); setPreview([]); setImported(false); }}
-                />
+        {/* Entity picker (shared) */}
+        <div className="flex items-center gap-3">
+          <Label className="text-xs shrink-0">Import to entity</Label>
+          <Select value={entityId} onValueChange={setEntityId}>
+            <SelectTrigger className="w-48 h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* ── Google Sheets tab ── */}
+        {tab === "sheets" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <TableProperties className="h-4 w-4" /> Import from Google Sheets
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg bg-muted/50 border px-4 py-3 text-xs text-muted-foreground space-y-1.5">
+                <p className="flex items-center gap-1.5 font-medium text-foreground"><Info className="h-3.5 w-3.5" /> Setup</p>
+                <p>1. Share → Anyone with the link → <strong>Viewer</strong></p>
+                <p>2. Row 1 must be headers. Recognised columns:</p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {COLUMNS.map((c) => <span key={c} className="rounded bg-background border px-1.5 py-0.5 font-mono text-[10px]">{c}</span>)}
+                </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Import to entity</Label>
-                <Select value={entityId} onValueChange={setEntityId}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">Google Sheet URL</Label>
+                <div className="flex gap-2">
+                  <Input className="text-xs h-8 flex-1" placeholder="https://docs.google.com/spreadsheets/d/…" value={url} onChange={(e) => { setUrl(e.target.value); setPreview([]); setImported(false); }} />
+                  <Button size="sm" className="h-8 text-xs shrink-0" onClick={fetchSheet} disabled={loading || !url.trim()}>
+                    {loading ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Fetching…</> : "Fetch"}
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-end">
-                <Button size="sm" className="h-8 text-xs w-full" onClick={fetchSheet} disabled={loading || !url.trim()}>
-                  {loading ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Fetching…</> : "Fetch Sheet"}
-                </Button>
-              </div>
-            </div>
+              {sheetsError && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {sheetsError}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
-            {error && (
-              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {error}
+        {/* ── File Upload tab ── */}
+        {tab === "file" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <FileSpreadsheet className="h-4 w-4" /> Import from CSV or Excel
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg bg-muted/50 border px-4 py-3 text-xs text-muted-foreground space-y-1.5">
+                <p className="flex items-center gap-1.5 font-medium text-foreground"><Info className="h-3.5 w-3.5" /> File format</p>
+                <p>Row 1 must be headers. Accepted: <strong>.csv .tsv .xlsx .xls</strong></p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {COLUMNS.map((c) => <span key={c} className="rounded bg-background border px-1.5 py-0.5 font-mono text-[10px]">{c}</span>)}
+                </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
 
-        {/* Preview */}
+              {/* Drop zone */}
+              <div
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${fileDragging ? "border-foreground bg-muted/40" : "border-border hover:bg-muted/30"}`}
+                onClick={() => fileRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setFileDragging(true); }}
+                onDragLeave={() => setFileDragging(false)}
+                onDrop={onDrop}
+              >
+                <Upload className="h-6 w-6 text-muted-foreground/50 mx-auto mb-2" />
+                {fileName ? (
+                  <p className="text-sm font-medium">{fileName}</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">Drag & drop a file here or click to browse</p>
+                    <p className="text-xs text-muted-foreground mt-1">.csv · .tsv · .xlsx · .xls</p>
+                  </>
+                )}
+              </div>
+              <input ref={fileRef} type="file" accept=".csv,.tsv,.xlsx,.xls,.xlsm" className="hidden" onChange={onFileInput} />
+
+              {fileError && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {fileError}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Preview (shared) ── */}
         {preview.length > 0 && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-3">
               <CardTitle className="text-sm font-semibold">
-                Preview — {preview.length} row{preview.length > 1 ? "s" : ""} found
+                Preview — {preview.length} row{preview.length !== 1 ? "s" : ""} found
               </CardTitle>
               {imported ? (
                 <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 font-medium">
