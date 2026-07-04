@@ -150,7 +150,7 @@ export default function LandingPage() {
             src="/logo.png"
             alt="Content-ment"
             style={{
-              width: 140, height: 140, borderRadius: 28, objectFit: "cover",
+              width: 220, height: 220, borderRadius: 40, objectFit: "cover",
               boxShadow: "0 24px 80px rgba(0,0,0,.8)",
               animation: "splashIn .7s cubic-bezier(.22,1,.36,1) forwards",
             }}
