@@ -1,0 +1,273 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EntityType {
+  INDIVIDUAL
+  BUSINESS
+}
+
+enum LLMProvider {
+  CLAUDE
+  OPENAI
+  GEMINI
+  OPENROUTER
+  DEEPSEEK
+  GROK
+  MISTRAL
+}
+
+enum ImageProvider {
+  OPENAI
+  GEMINI
+  FLUX
+  IDEOGRAM
+  STABILITY_AI
+}
+
+enum ContentStatus {
+  IDEA
+  RESEARCH
+  OUTLINE
+  DRAFT
+  AI_REVIEW
+  HUMAN_REVIEW
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  REPURPOSED
+  ARCHIVED
+}
+
+enum Platform {
+  WEBSITE
+  MEDIUM
+  LINKEDIN
+  LINKEDIN_CAROUSEL
+  INSTAGRAM
+  INSTAGRAM_CAROUSEL
+  INSTAGRAM_REEL
+  X_POST
+  X_THREAD
+  NEWSLETTER
+  REDDIT
+  QUORA
+  PODCAST
+  YOUTUBE
+  FAQ
+  KNOWLEDGE_BASE
+}
+
+enum CampaignType {
+  LAUNCH
+  HIRING
+  PRODUCT
+  PR
+  FUNDRAISING
+  CONFERENCE
+  THOUGHT_LEADERSHIP
+}
+
+model Entity {
+  id          String     @id @default(cuid())
+  clerkUserId String
+  type        EntityType @default(INDIVIDUAL)
+  name        String
+  slug        String     @unique
+  logo        String?
+  description String?
+  website     String?
+  industry    String?
+
+  // Social handles
+  linkedinHandle  String?
+  xHandle         String?
+  instagramHandle String?
+  mediumHandle    String?
+  redditHandle    String?
+  quoraHandle     String?
+  youtubeHandle   String?
+
+  // AI configuration
+  preferredLLM      LLMProvider?
+  llmApiKey         String?
+  llmModel          String?
+  llmTemperature    Float?       @default(0.7)
+  llmMaxTokens      Int?         @default(4096)
+
+  // Image AI configuration
+  preferredImageModel ImageProvider?
+  imageApiKey         String?
+
+  // Brand DNA
+  brandDNA    BrandDNA?
+
+  // Relations
+  knowledgeItems  KnowledgeItem[]
+  contentItems    ContentItem[]
+  campaigns       Campaign[]
+  assets          Asset[]
+  promptTemplates PromptTemplate[]
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clerkUserId])
+}
+
+model BrandDNA {
+  id       String @id @default(cuid())
+  entityId String @unique
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  mission         String?
+  vision          String?
+  positioning     String?
+  toneOfVoice     String?
+  writingStyle    String?
+  readingLevel    String?
+  emojiPolicy     String?
+  ctaStyle        String?
+  storytellingStyle String?
+  contrarian      Int?    @default(5)
+  humor           Int?    @default(5)
+
+  preferredVocabulary String[]
+  forbiddenVocabulary String[]
+  preferredAnalogies  String[]
+  goodWritingExamples String[]
+  badWritingExamples  String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model KnowledgeItem {
+  id       String @id @default(cuid())
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  title    String
+  type     String
+  content  String @db.Text
+  source   String?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entityId])
+}
+
+model ContentItem {
+  id       String @id @default(cuid())
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  contentId   String  @unique
+  masterId    String?
+  masterItem  ContentItem?  @relation("ContentTree", fields: [masterId], references: [id])
+  children    ContentItem[] @relation("ContentTree")
+
+  platform      Platform
+  pillar        String?
+  hook          String?
+  title         String
+  targetPersona String?
+  contentType   String?
+
+  status         ContentStatus @default(IDEA)
+  approved       Boolean       @default(false)
+  approvedBy     String?
+  approvedAt     DateTime?
+  author         String?
+  reviewer       String?
+
+  seoKeywords    String[]
+  researchNotes  String?   @db.Text
+  aiDraft        String?   @db.Text
+  humanDraft     String?   @db.Text
+  finalDraft     String?   @db.Text
+
+  seoTitle       String?
+  metaDescription String?
+  slug           String?
+
+  editorialScore Int?
+  seoScore       Int?
+
+  scheduledAt   DateTime?
+  publishedAt   DateTime?
+  publishedUrl  String?
+
+  campaignId    String?
+  campaign      Campaign? @relation(fields: [campaignId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entityId])
+  @@index([masterId])
+  @@index([campaignId])
+}
+
+model Campaign {
+  id       String @id @default(cuid())
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  name      String
+  type      CampaignType
+  objective String?
+  audience  String?
+  startDate DateTime?
+  endDate   DateTime?
+  kpis      String[]
+
+  contentItems ContentItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entityId])
+}
+
+model Asset {
+  id       String @id @default(cuid())
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  name     String
+  type     String
+  url      String
+  mimeType String?
+  size     Int?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entityId])
+}
+
+model PromptTemplate {
+  id       String @id @default(cuid())
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  prompt      String @db.Text
+  category    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entityId])
+}
