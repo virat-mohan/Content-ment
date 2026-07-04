@@ -83,7 +83,7 @@ export default function LandingPage() {
           <button onClick={toggleTheme} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${v("border")}`, background: v("bg2"), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: v("text2") }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></svg>
           </button>
-          <Link href="/app" style={{ fontSize: 13, fontWeight: 500, background: v("accent"), color: v("accentFg"), padding: "7px 16px", borderRadius: 6, border: `1px solid ${v("accent")}` }}>
+          <Link href="/dashboard" style={{ fontSize: 13, fontWeight: 500, background: v("accent"), color: v("accentFg"), padding: "7px 16px", borderRadius: 6, border: `1px solid ${v("accent")}` }}>
             Open app →
           </Link>
         </div>
@@ -111,7 +111,7 @@ export default function LandingPage() {
         </p>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
-          <Link href="/app" style={{ fontSize: 14, fontWeight: 500, background: v("accent"), color: v("accentFg"), padding: "10px 22px", borderRadius: 6, border: `1px solid ${v("accent")}` }}>Open app</Link>
+          <Link href="/dashboard" style={{ fontSize: 14, fontWeight: 500, background: v("accent"), color: v("accentFg"), padding: "10px 22px", borderRadius: 6, border: `1px solid ${v("accent")}` }}>Open app</Link>
           <a href="#features" style={{ fontSize: 14, color: v("text2"), padding: "10px 22px", borderRadius: 6, border: `1px solid ${v("border")}` }}>See features</a>
         </div>
 
@@ -211,7 +211,7 @@ export default function LandingPage() {
         <div style={{ background: v("text"), borderRadius: 16, padding: "64px 48px", textAlign: "center" }}>
           <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 700, letterSpacing: "-.04em", color: v("accentFg"), marginBottom: 16 }}>Start managing content like it's a system.</h2>
           <p style={{ fontSize: 16, color: `${v("accentFg")}88`, marginBottom: 36 }}>Free during trial. No account required. Everything in your browser.</p>
-          <Link href="/app" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, background: v("bg"), color: v("text"), padding: "11px 24px", borderRadius: 6 }}>
+          <Link href="/dashboard" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, background: v("bg"), color: v("text"), padding: "11px 24px", borderRadius: 6 }}>
             Open Content-ment →
           </Link>
         </div>
@@ -227,7 +227,7 @@ export default function LandingPage() {
           </div>
           <div style={{ display: "flex", gap: 20 }}>
             <a href="#features" style={{ fontSize: 13, color: v("text3") }}>Features</a>
-            <Link href="/app" style={{ fontSize: 13, color: v("text3") }}>Open app</Link>
+            <Link href="/dashboard" style={{ fontSize: 13, color: v("text3") }}>Open app</Link>
           </div>
         </div>
       </div>
