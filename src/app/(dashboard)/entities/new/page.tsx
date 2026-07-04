@@ -1,17 +1,11 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { authOptions } from "@/lib/auth";
 import { Header } from "@/components/layout/header";
 import { EntityForm } from "@/components/entities/entity-form";
 import { ChevronLeft } from "lucide-react";
 
 export const metadata = { title: "New Entity" };
 
-export default async function NewEntityPage() {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/sign-in");
-
+export default function NewEntityPage() {
   return (
     <div className="flex flex-col">
       <Header title="New Entity" />
@@ -21,7 +15,7 @@ export default async function NewEntityPage() {
         </Link>
         <div className="mb-6">
           <h1 className="text-xl font-semibold">Create Entity</h1>
-          <p className="text-sm text-muted-foreground mt-1">An entity is a person or business you create content for.</p>
+          <p className="text-sm text-muted-foreground mt-1">A person or business you create content for.</p>
         </div>
         <EntityForm />
       </div>

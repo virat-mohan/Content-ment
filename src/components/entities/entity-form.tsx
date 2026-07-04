@@ -10,7 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { entitySchema, type EntityFormValues } from "@/lib/validations/entity";
-import type { Entity } from "@prisma/client";
+import { entityStore, type Entity } from "@/lib/store";
+import { generateId } from "@/lib/id";
+import { slugify } from "@/lib/utils";
 
 interface EntityFormProps {
   entity?: Entity;
@@ -20,13 +22,7 @@ export function EntityForm({ entity }: EntityFormProps) {
   const router = useRouter();
   const { toast } = useToast();
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors, isSubmitting },
-  } = useForm<EntityFormValues>({
+  const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<EntityFormValues>({
     resolver: zodResolver(entitySchema),
     defaultValues: {
       name: entity?.name ?? "",
@@ -41,33 +37,47 @@ export function EntityForm({ entity }: EntityFormProps) {
       redditHandle: entity?.redditHandle ?? "",
       quoraHandle: entity?.quoraHandle ?? "",
       youtubeHandle: entity?.youtubeHandle ?? "",
-      preferredLLM: entity?.preferredLLM ?? undefined,
+      preferredLLM: entity?.preferredLLM as EntityFormValues["preferredLLM"] ?? undefined,
       llmModel: entity?.llmModel ?? "",
     },
   });
 
   const type = watch("type");
 
-  async function onSubmit(data: EntityFormValues) {
-    const url = entity ? `/api/entities/${entity.id}` : "/api/entities";
-    const method = entity ? "PATCH" : "POST";
+  function onSubmit(data: EntityFormValues) {
+    const now = new Date().toISOString();
+    let slug = entity?.slug ?? slugify(data.name);
 
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      toast({ title: err.error || "Something went wrong", variant: "destructive" });
-      return;
+    if (!entity) {
+      const existing = entityStore.getBySlug(slug);
+      if (existing) slug = `${slug}-${Date.now()}`;
     }
 
-    const result = await res.json();
+    const saved: Entity = {
+      id: entity?.id ?? generateId(),
+      slug,
+      name: data.name,
+      type: data.type,
+      description: data.description || undefined,
+      website: data.website || undefined,
+      industry: data.industry || undefined,
+      linkedinHandle: data.linkedinHandle || undefined,
+      xHandle: data.xHandle || undefined,
+      instagramHandle: data.instagramHandle || undefined,
+      mediumHandle: data.mediumHandle || undefined,
+      redditHandle: data.redditHandle || undefined,
+      quoraHandle: data.quoraHandle || undefined,
+      youtubeHandle: data.youtubeHandle || undefined,
+      preferredLLM: data.preferredLLM || undefined,
+      llmApiKey: data.llmApiKey || undefined,
+      llmModel: data.llmModel || undefined,
+      createdAt: entity?.createdAt ?? now,
+      updatedAt: now,
+    };
+
+    entityStore.save(saved);
     toast({ title: entity ? "Entity updated" : "Entity created" });
-    router.push(`/entities/${result.slug}`);
-    router.refresh();
+    router.push(`/entities/${saved.slug}`);
   }
 
   return (
@@ -80,35 +90,28 @@ export function EntityForm({ entity }: EntityFormProps) {
             <Input id="name" placeholder="Arihant Jain" {...register("name")} />
             {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
-
           <div className="space-y-1.5">
             <Label htmlFor="type">Type *</Label>
             <Select value={type} onValueChange={(v) => setValue("type", v as "INDIVIDUAL" | "BUSINESS")}>
-              <SelectTrigger id="type">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger id="type"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="INDIVIDUAL">Individual</SelectItem>
                 <SelectItem value="BUSINESS">Business</SelectItem>
               </SelectContent>
             </Select>
           </div>
-
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="description">Description</Label>
             <Textarea id="description" placeholder="Brief description..." rows={3} {...register("description")} />
-            {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
           </div>
-
           <div className="space-y-1.5">
             <Label htmlFor="website">Website</Label>
             <Input id="website" placeholder="https://example.com" {...register("website")} />
             {errors.website && <p className="text-xs text-destructive">{errors.website.message}</p>}
           </div>
-
           <div className="space-y-1.5">
             <Label htmlFor="industry">Industry</Label>
-            <Input id="industry" placeholder="Technology, Marketing, Finance..." {...register("industry")} />
+            <Input id="industry" placeholder="Technology, Marketing..." {...register("industry")} />
           </div>
         </div>
       </section>
@@ -127,11 +130,7 @@ export function EntityForm({ entity }: EntityFormProps) {
           ].map(({ id, label, placeholder }) => (
             <div key={id} className="space-y-1.5">
               <Label htmlFor={id}>{label}</Label>
-              <Input
-                id={id}
-                placeholder={placeholder}
-                {...register(id as keyof EntityFormValues)}
-              />
+              <Input id={id} placeholder={placeholder} {...register(id as keyof EntityFormValues)} />
             </div>
           ))}
         </div>
@@ -139,19 +138,12 @@ export function EntityForm({ entity }: EntityFormProps) {
 
       <section className="space-y-4">
         <h2 className="text-sm font-semibold">AI Configuration</h2>
-        <p className="text-xs text-muted-foreground">
-          Connect your own AI provider. Content-ment never uses its own tokens.
-        </p>
+        <p className="text-xs text-muted-foreground">Connect your own AI provider. You can also set a global key in Settings.</p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="preferredLLM">Preferred LLM</Label>
-            <Select
-              value={watch("preferredLLM") ?? ""}
-              onValueChange={(v) => setValue("preferredLLM", v as EntityFormValues["preferredLLM"])}
-            >
-              <SelectTrigger id="preferredLLM">
-                <SelectValue placeholder="Select provider" />
-              </SelectTrigger>
+            <Select value={watch("preferredLLM") ?? ""} onValueChange={(v) => setValue("preferredLLM", v as EntityFormValues["preferredLLM"])}>
+              <SelectTrigger id="preferredLLM"><SelectValue placeholder="Select provider" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="CLAUDE">Claude (Anthropic)</SelectItem>
                 <SelectItem value="OPENAI">OpenAI</SelectItem>
@@ -163,31 +155,22 @@ export function EntityForm({ entity }: EntityFormProps) {
               </SelectContent>
             </Select>
           </div>
-
           <div className="space-y-1.5">
             <Label htmlFor="llmModel">Model</Label>
             <Input id="llmModel" placeholder="claude-opus-4-5, gpt-4o..." {...register("llmModel")} />
           </div>
-
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="llmApiKey">API Key</Label>
-            <Input
-              id="llmApiKey"
-              type="password"
-              placeholder="sk-..."
-              {...register("llmApiKey")}
-            />
-            <p className="text-xs text-muted-foreground">Stored securely. Never shared or logged.</p>
+            <Input id="llmApiKey" type="password" placeholder="sk-..." {...register("llmApiKey")} />
+            <p className="text-xs text-muted-foreground">Stored in your browser only. Never sent to our servers.</p>
           </div>
         </div>
       </section>
 
       <div className="flex items-center justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={() => router.back()}>
-          Cancel
-        </Button>
+        <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : entity ? "Save changes" : "Create entity"}
+          {entity ? "Save changes" : "Create entity"}
         </Button>
       </div>
     </form>

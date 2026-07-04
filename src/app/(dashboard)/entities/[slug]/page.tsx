@@ -1,39 +1,30 @@
-import { getServerSession } from "next-auth";
-import { redirect, notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { useParams, notFound } from "next/navigation";
+import { entityStore, type Entity } from "@/lib/store";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Pencil, Globe, BookOpen, FileText, ExternalLink, ChevronLeft, Zap } from "lucide-react";
+import { Pencil, Globe, FileText, ExternalLink, ChevronLeft, Zap } from "lucide-react";
 
-interface PageProps {
-  params: Promise<{ slug: string }>;
-}
+export default function EntityPage() {
+  const params = useParams();
+  const slug = params.slug as string;
+  const [entity, setEntity] = useState<Entity | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export async function generateMetadata({ params }: PageProps) {
-  const { slug } = await params;
-  const entity = await prisma.entity.findUnique({ where: { slug }, select: { name: true } });
-  return { title: entity?.name ?? "Entity" };
-}
+  useEffect(() => {
+    const e = entityStore.getBySlug(slug);
+    setEntity(e ?? null);
+    setLoading(false);
+  }, [slug]);
 
-export default async function EntityPage({ params }: PageProps) {
-  const { slug } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/sign-in");
-
-  const entity = await prisma.entity.findUnique({
-    where: { slug },
-    include: {
-      brandDNA: true,
-      _count: { select: { contentItems: true, knowledgeItems: true, assets: true } },
-    },
-  });
-
-  if (!entity || entity.userId !== session.user.id) notFound();
+  if (loading) return null;
+  if (!entity) return notFound();
 
   const socialHandles = [
     { label: "LinkedIn", handle: entity.linkedinHandle, url: `https://linkedin.com/in/${entity.linkedinHandle}` },
@@ -60,39 +51,14 @@ export default async function EntityPage({ params }: PageProps) {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-semibold">{entity.name}</h1>
-                <Badge variant="secondary" className="text-xs">
-                  {entity.type === "INDIVIDUAL" ? "Individual" : "Business"}
-                </Badge>
+                <Badge variant="secondary" className="text-xs">{entity.type === "INDIVIDUAL" ? "Individual" : "Business"}</Badge>
               </div>
               {entity.description && <p className="text-sm text-muted-foreground mt-0.5">{entity.description}</p>}
             </div>
           </div>
           <Button size="sm" variant="outline" asChild>
-            <Link href={`/entities/${entity.slug}/edit`}>
-              <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-            </Link>
+            <Link href={`/entities/${entity.slug}/edit`}><Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit</Link>
           </Button>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3 mb-6">
-          <Card>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-semibold">{entity._count.contentItems}</div>
-              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Content Items</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-semibold">{entity._count.knowledgeItems}</div>
-              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><BookOpen className="h-3 w-3" /> Knowledge Items</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-semibold">{entity._count.assets}</div>
-              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Assets</p>
-            </CardContent>
-          </Card>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -118,10 +84,7 @@ export default async function EntityPage({ params }: PageProps) {
                   <Separator />
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">AI Provider</span>
-                    <div className="flex items-center gap-1">
-                      <Zap className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-xs">{entity.preferredLLM}</span>
-                    </div>
+                    <div className="flex items-center gap-1"><Zap className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{entity.preferredLLM}</span></div>
                   </div>
                   {entity.llmModel && (
                     <div className="flex items-center justify-between">
@@ -129,6 +92,10 @@ export default async function EntityPage({ params }: PageProps) {
                       <span className="text-xs font-mono">{entity.llmModel}</span>
                     </div>
                   )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">API Key</span>
+                    <span className="text-xs font-mono text-muted-foreground">{entity.llmApiKey ? "••••••••" : "Not set"}</span>
+                  </div>
                 </>
               )}
             </CardContent>
@@ -149,6 +116,19 @@ export default async function EntityPage({ params }: PageProps) {
               </CardContent>
             </Card>
           )}
+        </div>
+
+        <div className="mt-4">
+          <Card>
+            <CardHeader><CardTitle className="text-sm font-semibold">AI Assistant</CardTitle></CardHeader>
+            <CardContent>
+              <Link href={`/entities/${entity.slug}/ai`}>
+                <Button variant="outline" size="sm">
+                  <Zap className="mr-1.5 h-3.5 w-3.5" /> Open AI Chat
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
