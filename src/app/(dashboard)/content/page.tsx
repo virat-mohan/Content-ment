@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
-  contentStore, knowledgeStore, entityStore,
+  contentStore, knowledgeStore, entityStore, aiSettingsStore,
   type ContentItem, type ContentStatus, type ContentPlatform,
   CONTENT_STATUS_LABELS, PLATFORM_CODE, generateContentId,
 } from "@/lib/store";
+import {
+  PLATFORM_SPECS, buildSystemPrompt, buildDraftPrompt,
+  getCharStatus, CHAR_STATUS_STYLES, type KnowledgeDoc,
+} from "@/lib/ai-draft";
 import { useActiveEntity } from "@/hooks/use-active-entity";
 import { generateId } from "@/lib/id";
 import { Header } from "@/components/layout/header";
@@ -16,7 +20,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Pencil, ExternalLink, Sparkles, Share2, Copy, Check, Loader2, Download } from "lucide-react";
+import {
+  Plus, Trash2, Pencil, ExternalLink, Sparkles, Share2,
+  Copy, Check, Loader2, Download, RefreshCw, BookOpen, AlertCircle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatRelativeDate } from "@/lib/utils";
 import Link from "next/link";
@@ -33,16 +40,6 @@ const STATUS_COLORS: Record<ContentStatus, string> = {
 
 const STATUSES = Object.keys(CONTENT_STATUS_LABELS) as ContentStatus[];
 const PLATFORMS: ContentPlatform[] = ["linkedin", "twitter", "instagram", "blog", "youtube", "email", "other"];
-
-const PLATFORM_TIPS: Record<ContentPlatform, string> = {
-  linkedin: "Professional tone, 1200–1800 chars ideal. Use line breaks, end with a question. No more than 3 hashtags.",
-  twitter: "Under 280 chars per tweet. Hook-first. Use a thread for depth. Bold claim → proof → CTA.",
-  instagram: "Visual-first, caption supports. Lead with a hook. 150–200 words ideal. 5–10 hashtags at end.",
-  blog: "SEO-friendly H2s, 800–2000 words. Open with a problem, close with action steps.",
-  youtube: "Script or description. Hook in first 10 seconds. Chapters for long-form. CTA at 30% and end.",
-  email: "Subject under 50 chars. One clear CTA. Personalise the opener. Mobile-first formatting.",
-  other: "Match platform norms. Keep it concise and goal-oriented.",
-};
 
 const EMPTY: Partial<ContentItem> = {
   contentId: "", pillar: "", hook: "",
@@ -88,48 +85,82 @@ function exportToCsv(items: ContentItem[]) {
   URL.revokeObjectURL(url);
 }
 
-async function generateAIDraft(
-  entity: ReturnType<typeof entityStore.getAll>[0],
-  item: Partial<ContentItem>,
-  knowledgeDocs: { title: string; content: string }[]
-): Promise<string> {
-  const platform = item.platform ?? "other";
-  const tip = PLATFORM_TIPS[platform];
-  const brandContext = knowledgeDocs.map((d) => `### ${d.title}\n${d.content}`).join("\n\n");
-  const prompt = [
-    `You are a content strategist writing for ${entity.name}${entity.industry ? ` (${entity.industry})` : ""}.`,
-    entity.description ? `About: ${entity.description}` : "",
-    brandContext ? `\n## Brand context\n${brandContext}` : "",
-    `\n## Platform: ${platform}`,
-    `Platform guidance: ${tip}`,
-    `\n## Content brief`,
-    item.pillar ? `Pillar: ${item.pillar}` : "",
-    `Hook: ${item.hook || item.title || ""}`,
-    item.title && item.title !== item.hook ? `Working title: ${item.title}` : "",
-    item.notes ? `Notes: ${item.notes}` : "",
-    item.tags?.length ? `Topics: ${item.tags.join(", ")}` : "",
-    `\nWrite the full content body for this piece. Respond with only the content — no preamble, no markdown headers, no explanations.`,
-  ].filter(Boolean).join("\n");
+// ─── Character meter component ────────────────────────────────────────────────
 
-  const aiSettings = entity.llmApiKey
-    ? { provider: entity.preferredLLM ?? "CLAUDE", apiKey: entity.llmApiKey, model: entity.llmModel ?? "" }
-    : null;
+function CharMeter({ platform, body }: { platform: ContentPlatform; body: string }) {
+  const spec = PLATFORM_SPECS[platform];
+  const count = body?.length ?? 0;
+  const status = getCharStatus(platform, count);
+  const styles = CHAR_STATUS_STYLES[status];
+  const pct = Math.min(100, (count / spec.maxChars) * 100);
 
-  if (!aiSettings?.apiKey) throw new Error("No AI API key configured. Add one in entity settings.");
-
-  const res = await fetch("/api/ai/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, ...aiSettings }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error ?? "AI generation failed");
-  }
-  const data = await res.json() as { text?: string };
-  return data.text ?? "";
+  return (
+    <div className="space-y-1">
+      <div className="h-1 rounded-full bg-muted overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${styles.bar}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="text-muted-foreground">
+          Target: <span className="font-medium">{spec.formatGuide}</span>
+        </span>
+        <span className={styles.text}>
+          {count.toLocaleString()} chars
+          {status !== "empty" && ` · ${styles.label}`}
+        </span>
+      </div>
+    </div>
+  );
 }
+
+// ─── AI context summary ────────────────────────────────────────────────────────
+
+function AiContextBadges({ entityName, knowledgeDocs, pillar, platform }: {
+  entityName: string;
+  knowledgeDocs: KnowledgeDoc[];
+  pillar: string;
+  platform: ContentPlatform;
+}) {
+  const brandDocs = knowledgeDocs.filter(d =>
+    /brand|voice|tone|style|guideline|persona|about/i.test(d.type + " " + d.title)
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span className="font-medium">Context:</span>
+      <span className="inline-flex items-center gap-1 bg-muted rounded px-1.5 py-0.5">
+        {entityName}
+      </span>
+      {pillar && (
+        <span className="inline-flex items-center gap-1 bg-muted rounded px-1.5 py-0.5">
+          Pillar: {pillar}
+        </span>
+      )}
+      <span className="inline-flex items-center gap-1 bg-muted rounded px-1.5 py-0.5 capitalize">
+        {PLATFORM_SPECS[platform].label}
+      </span>
+      {brandDocs.length > 0 && (
+        <span className="inline-flex items-center gap-1 bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 rounded px-1.5 py-0.5">
+          <BookOpen className="h-2.5 w-2.5" />
+          {brandDocs.length} brand doc{brandDocs.length > 1 ? "s" : ""}
+        </span>
+      )}
+      {knowledgeDocs.length > brandDocs.length && (
+        <span className="inline-flex items-center gap-1 bg-muted rounded px-1.5 py-0.5">
+          +{knowledgeDocs.length - brandDocs.length} context doc{knowledgeDocs.length - brandDocs.length > 1 ? "s" : ""}
+        </span>
+      )}
+      {knowledgeDocs.length === 0 && (
+        <span className="text-amber-600 dark:text-amber-400 inline-flex items-center gap-1">
+          <AlertCircle className="h-2.5 w-2.5" /> No brand docs — add them in Knowledge for better results
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ContentPage() {
   const { toast } = useToast();
@@ -139,19 +170,28 @@ export default function ContentPage() {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<ContentItem>>(EMPTY);
+  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDoc[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
-  function load() {
+  const load = useCallback(() => {
     if (!activeId) return;
     setItems(contentStore.getAll().filter(c => c.entityId === activeId));
-  }
+  }, [activeId]);
 
-  useEffect(() => { load(); }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [load]);
 
-  const pillars = Array.from(new Set(items.map(c => c.pillar).filter(Boolean))).sort();
+  // Load knowledge docs when dialog opens
+  useEffect(() => {
+    if (open && activeId) {
+      setKnowledgeDocs(knowledgeStore.getAll(activeId));
+    }
+  }, [open, activeId]);
+
+  const pillars = Array.from(new Set(items.map(c => c.pillar).filter(Boolean))).sort() as string[];
   const filtered = items
     .filter(c => filterStatus === "all" || c.status === filterStatus)
     .filter(c => filterPillar === "all" || c.pillar === filterPillar);
@@ -159,48 +199,48 @@ export default function ContentPage() {
   function openNew() {
     setEditing({ ...EMPTY, entityId: activeId });
     setShareUrl(null);
+    setAiError("");
     setOpen(true);
   }
 
   function openEdit(item: ContentItem) {
     setEditing({ ...item });
     setShareUrl(item.reviewToken ? `${window.location.origin}/review/${item.reviewToken}` : null);
+    setAiError("");
     setOpen(true);
   }
 
   function handlePlatformChange(platform: ContentPlatform) {
-    // Auto-update contentId suffix when platform changes on a new item
     if (editing.id) { setEditing(prev => ({ ...prev, platform })); return; }
     const allItems = contentStore.getAll();
-    const entityName = activeEntity?.name ?? "XX";
-    const newId = generateContentId(entityName, platform, allItems);
+    const newId = generateContentId(activeEntity?.name ?? "XX", platform, allItems);
     setEditing(prev => ({ ...prev, platform, contentId: newId }));
   }
 
   function save() {
-    if (!editing.title?.trim() || !editing.entityId) {
-      toast({ title: "Title is required", variant: "destructive" });
+    if (!editing.title?.trim() && !editing.hook?.trim()) {
+      toast({ title: "Hook or title is required", variant: "destructive" });
       return;
     }
+    if (!editing.entityId) return;
     const now = new Date().toISOString();
     const isNew = !editing.id;
     const allItems = contentStore.getAll();
     const platform = (editing.platform ?? "linkedin") as ContentPlatform;
-    const entityName = activeEntity?.name ?? "XX";
 
-    // Auto-assign contentId if blank
     let contentId = editing.contentId?.trim() || "";
-    if (!contentId) {
-      contentId = generateContentId(entityName, platform, allItems);
-    }
+    if (!contentId) contentId = generateContentId(activeEntity?.name ?? "XX", platform, allItems);
+
+    const title = (editing.title || editing.hook || "").trim();
+    const hook = (editing.hook || editing.title || "").trim();
 
     const item: ContentItem = {
       id: editing.id ?? generateId(),
       contentId,
       entityId: editing.entityId!,
       pillar: editing.pillar ?? "",
-      hook: editing.hook ?? editing.title!,
-      title: editing.title!,
+      hook,
+      title,
       body: editing.body ?? "",
       platform,
       status: (editing.status ?? "not_started") as ContentStatus,
@@ -227,16 +267,66 @@ export default function ContentPage() {
     toast({ title: "Deleted" });
   }
 
-  async function handleAIDraft() {
-    if (!activeEntity) { toast({ title: "No active entity", variant: "destructive" }); return; }
+  async function runAIDraft(refine = false) {
+    if (!activeEntity) {
+      setAiError("No active entity selected.");
+      return;
+    }
+
+    // Resolve AI settings: entity-level first, then global
+    const global = aiSettingsStore.get();
+    const provider = activeEntity.preferredLLM || global.provider || "CLAUDE";
+    const apiKey = activeEntity.llmApiKey || global.apiKey;
+    const model = activeEntity.llmModel || global.model;
+
+    if (!apiKey) {
+      setAiError("No AI API key found. Add one in entity settings or Settings → AI.");
+      return;
+    }
+
+    if (!editing.hook?.trim() && !editing.title?.trim()) {
+      setAiError("Add a hook first so the AI knows what to write about.");
+      return;
+    }
+
+    setAiError("");
     setAiLoading(true);
+
+    const platform = (editing.platform ?? "linkedin") as ContentPlatform;
+    const docs = knowledgeDocs.length ? knowledgeDocs : knowledgeStore.getAll(activeEntity.id);
+
+    const systemPrompt = buildSystemPrompt(activeEntity, docs);
+    const userPrompt = buildDraftPrompt(
+      refine ? editing : { ...editing, body: "" }, // refine = improve existing, else fresh
+      platform
+    );
+
     try {
-      const knowledgeDocs = knowledgeStore.getAll(activeEntity.id);
-      const draft = await generateAIDraft(activeEntity, editing, knowledgeDocs);
-      setEditing(prev => ({ ...prev, body: draft, status: prev.status === "not_started" ? "drafted" : prev.status }));
-      bodyRef.current?.focus();
+      const res = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider,
+          apiKey,
+          model,
+          systemPrompt,
+          messages: [{ role: "user", content: userPrompt }],
+        }),
+      });
+
+      const data = await res.json() as { text?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "AI generation failed");
+
+      const draft = data.text ?? "";
+      setEditing(prev => ({
+        ...prev,
+        body: draft,
+        status: prev.status === "not_started" ? "drafted" : prev.status,
+      }));
+      setKnowledgeDocs(docs); // ensure badges update
+      setTimeout(() => bodyRef.current?.focus(), 50);
     } catch (e) {
-      toast({ title: "AI draft failed", description: (e as Error).message, variant: "destructive" });
+      setAiError((e as Error).message);
     } finally {
       setAiLoading(false);
     }
@@ -245,9 +335,8 @@ export default function ContentPage() {
   function generateShareLink() {
     const token = generateId();
     setEditing(prev => ({ ...prev, reviewToken: token, status: "sent_for_approval" }));
-    const url = `${window.location.origin}/review/${token}`;
-    setShareUrl(url);
-    toast({ title: "Review link ready — save to activate it" });
+    setShareUrl(`${window.location.origin}/review/${token}`);
+    toast({ title: "Review link ready — save the item to activate it" });
   }
 
   function copyShareLink() {
@@ -257,11 +346,16 @@ export default function ContentPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const platform = (editing.platform ?? "linkedin") as ContentPlatform;
+  const hasDraft = (editing.body?.trim().length ?? 0) > 0;
+  const canDraft = !!(editing.hook?.trim() || editing.title?.trim());
+
   return (
     <div className="flex flex-col">
       <Header title="Content" />
       <div className="flex-1 p-6 animate-fade-in space-y-4">
 
+        {/* Toolbar */}
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="All stages" /></SelectTrigger>
@@ -275,13 +369,14 @@ export default function ContentPage() {
               <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="All pillars" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All pillars</SelectItem>
-                {pillars.map((p) => <SelectItem key={p} value={p!} className="text-xs">{p}</SelectItem>)}
+                {pillars.map((p) => <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
           <div className="ml-auto flex items-center gap-2">
             {items.length > 0 && (
-              <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => exportToCsv(filtered.length < items.length ? filtered : items)}>
+              <Button size="sm" variant="outline" className="h-8 text-xs gap-1"
+                onClick={() => exportToCsv(filtered.length < items.length ? filtered : items)}>
                 <Download className="h-3.5 w-3.5" /> Export CSV
               </Button>
             )}
@@ -294,6 +389,7 @@ export default function ContentPage() {
           </div>
         </div>
 
+        {/* Table */}
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center py-20 gap-3 text-center">
             <p className="text-sm font-medium">No content yet</p>
@@ -321,9 +417,9 @@ export default function ContentPage() {
                       <code className="text-xs font-mono text-muted-foreground">{item.contentId || "—"}</code>
                     </td>
                     <td className="px-3 py-3 hidden md:table-cell">
-                      {item.pillar ? (
-                        <span className="text-xs text-muted-foreground truncate max-w-[100px] block">{item.pillar}</span>
-                      ) : <span className="text-muted-foreground/40">—</span>}
+                      {item.pillar
+                        ? <span className="text-xs text-muted-foreground truncate max-w-[100px] block">{item.pillar}</span>
+                        : <span className="text-muted-foreground/30">—</span>}
                     </td>
                     <td className="px-3 py-3">
                       <div>
@@ -367,22 +463,24 @@ export default function ContentPage() {
         )}
       </div>
 
-      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setShareUrl(null); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* ─── Edit / Create Dialog ─────────────────────────────────── */}
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setShareUrl(null); setAiError(""); } }}>
+        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-sm">
               {editing.id ? `Edit — ${editing.contentId || "content"}` : "New Content"}
             </DialogTitle>
           </DialogHeader>
+
           <div className="space-y-4 pt-1">
 
-            {/* Content ID (read-only on edit, auto-generated on new) */}
+            {/* Content ID + Pillar */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Content ID</Label>
                 <Input
                   className="h-8 text-xs font-mono"
-                  placeholder="Auto-generated"
+                  placeholder="Auto-generated on save"
                   value={editing.contentId ?? ""}
                   onChange={(e) => setEditing({ ...editing, contentId: e.target.value })}
                 />
@@ -400,18 +498,20 @@ export default function ContentPage() {
 
             {/* Hook */}
             <div className="space-y-1.5">
-              <Label className="text-xs">Hook</Label>
+              <Label className="text-xs">
+                Hook <span className="text-muted-foreground font-normal">(the scroll-stopping angle — drives the AI draft)</span>
+              </Label>
               <Input
                 className="h-8 text-sm"
-                placeholder="The scroll-stopping hook / angle"
+                placeholder="e.g. Most founders get hiring backwards. Here's what changed everything for us."
                 value={editing.hook ?? ""}
                 onChange={(e) => setEditing({ ...editing, hook: e.target.value })}
               />
             </div>
 
-            {/* Title */}
+            {/* Working title */}
             <div className="space-y-1.5">
-              <Label className="text-xs">Working Title</Label>
+              <Label className="text-xs">Working Title <span className="text-muted-foreground font-normal">(optional if same as hook)</span></Label>
               <Input
                 className="h-8 text-sm"
                 value={editing.title ?? ""}
@@ -424,9 +524,14 @@ export default function ContentPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs">Platform</Label>
                 <Select value={editing.platform ?? "linkedin"} onValueChange={(v) => handlePlatformChange(v as ContentPlatform)}>
-                  <SelectTrigger className="h-8 text-xs capitalize"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {PLATFORMS.map((p) => <SelectItem key={p} value={p} className="capitalize">{p} <span className="text-muted-foreground ml-1">({PLATFORM_CODE[p]})</span></SelectItem>)}
+                    {PLATFORMS.map((p) => (
+                      <SelectItem key={p} value={p} className="text-xs">
+                        {PLATFORM_SPECS[p].label}
+                        <span className="text-muted-foreground ml-1">· {PLATFORM_SPECS[p].formatGuide}</span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -441,35 +546,89 @@ export default function ContentPage() {
               </div>
             </div>
 
-            {/* Platform tip */}
-            {editing.platform && (
-              <p className="text-[11px] text-muted-foreground bg-muted/40 rounded px-2.5 py-1.5 leading-relaxed">
-                <span className="font-medium capitalize">{editing.platform}:</span> {PLATFORM_TIPS[editing.platform as ContentPlatform]}
-              </p>
-            )}
-
-            {/* Body + AI draft */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Body</Label>
-                <Button
-                  type="button" variant="outline" size="sm" className="h-6 text-[11px] gap-1 px-2"
-                  onClick={handleAIDraft}
-                  disabled={aiLoading || (!editing.hook?.trim() && !editing.title?.trim())}
-                >
-                  {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3 text-violet-500" />}
-                  AI Draft
-                </Button>
+            {/* ── AI Draft section ───────────────────────────────────── */}
+            <div className="rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-950/20 p-4 space-y-3">
+              {/* Header row */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-violet-500 shrink-0" />
+                  <span className="text-xs font-semibold text-violet-900 dark:text-violet-200">AI Draft</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {hasDraft && (
+                    <Button
+                      type="button" variant="outline" size="sm"
+                      className="h-7 text-[11px] gap-1 border-violet-200 dark:border-violet-700"
+                      onClick={() => runAIDraft(true)}
+                      disabled={aiLoading}
+                    >
+                      {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                      Refine
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    className="h-7 text-[11px] gap-1 bg-violet-600 hover:bg-violet-700 text-white"
+                    size="sm"
+                    onClick={() => runAIDraft(false)}
+                    disabled={aiLoading || !canDraft}
+                  >
+                    {aiLoading
+                      ? <><Loader2 className="h-3 w-3 animate-spin" /> Drafting for {PLATFORM_SPECS[platform].label}…</>
+                      : <><Sparkles className="h-3 w-3" /> {hasDraft ? "Regenerate" : `Draft for ${PLATFORM_SPECS[platform].label}`}</>
+                    }
+                  </Button>
+                </div>
               </div>
-              <Textarea ref={bodyRef} rows={8} className="text-sm resize-none font-mono" value={editing.body ?? ""} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
-              {editing.body && (
-                <p className="text-[11px] text-muted-foreground text-right">{editing.body.length} chars</p>
+
+              {/* Context summary */}
+              {activeEntity && (
+                <AiContextBadges
+                  entityName={activeEntity.name}
+                  knowledgeDocs={knowledgeDocs}
+                  pillar={editing.pillar ?? ""}
+                  platform={platform}
+                />
               )}
+
+              {/* Platform spec hint */}
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {PLATFORM_SPECS[platform].formatGuide} ·{" "}
+                {platform === "linkedin" && "professional tone, short paragraphs, ends with question"}
+                {platform === "twitter" && "numbered thread format, one insight per tweet"}
+                {platform === "instagram" && "hook first line, conversational body, hashtags at end"}
+                {platform === "blog" && "markdown H2 sections, SEO-friendly, 800–2,000 words"}
+                {platform === "youtube" && "description + script outline with [HOOK] [SECTION] markers"}
+                {platform === "email" && "subject lines, preview text, body, one CTA"}
+                {platform === "other" && "clear, purposeful, platform-appropriate"}
+              </p>
+
+              {/* AI error */}
+              {aiError && (
+                <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive">
+                  <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>{aiError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Body textarea */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Body</Label>
+              <Textarea
+                ref={bodyRef}
+                rows={10}
+                className="text-sm resize-none font-mono leading-relaxed"
+                placeholder={`Write or generate your ${PLATFORM_SPECS[platform].label} content here…`}
+                value={editing.body ?? ""}
+                onChange={(e) => setEditing({ ...editing, body: e.target.value })}
+              />
+              <CharMeter platform={platform} body={editing.body ?? ""} />
             </div>
 
             {/* Notes */}
             <div className="space-y-1.5">
-              <Label className="text-xs">Notes</Label>
+              <Label className="text-xs">Notes <span className="text-muted-foreground font-normal">(also feeds the AI — add context, data points, personal anecdotes)</span></Label>
               <Input className="h-8 text-sm" value={editing.notes ?? ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} />
             </div>
 
