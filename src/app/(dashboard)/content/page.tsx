@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { entityStore, contentStore, type Entity, type ContentItem, type ContentStatus, type ContentPlatform } from "@/lib/store";
+import { contentStore, type ContentItem, type ContentStatus, type ContentPlatform } from "@/lib/store";
+import { useActiveEntity } from "@/hooks/use-active-entity";
 import { generateId } from "@/lib/id";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -33,26 +34,21 @@ const EMPTY: Partial<ContentItem> = {
 
 export default function ContentPage() {
   const { toast } = useToast();
-  const [entities, setEntities] = useState<Entity[]>([]);
-  const [filterEntity, setFilterEntity] = useState("all");
+  const { activeId } = useActiveEntity();
   const [filterStatus, setFilterStatus] = useState("all");
   const [items, setItems] = useState<ContentItem[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<ContentItem>>(EMPTY);
 
   useEffect(() => {
-    setEntities(entityStore.getAll());
-    setItems(contentStore.getAll());
-  }, []);
+    if (!activeId) return;
+    setItems(contentStore.getAll().filter(c => c.entityId === activeId));
+  }, [activeId]);
 
-  const filtered = items.filter((c) => {
-    if (filterEntity !== "all" && c.entityId !== filterEntity) return false;
-    if (filterStatus !== "all" && c.status !== filterStatus) return false;
-    return true;
-  });
+  const filtered = filterStatus === "all" ? items : items.filter(c => c.status === filterStatus);
 
   function openNew() {
-    setEditing({ ...EMPTY, entityId: entities[0]?.id ?? "" });
+    setEditing({ ...EMPTY, entityId: activeId });
     setOpen(true);
   }
 
@@ -93,8 +89,6 @@ export default function ContentPage() {
     toast({ title: "Deleted" });
   }
 
-  const entityName = (id: string) => entities.find((e) => e.id === id)?.name ?? "—";
-
   return (
     <div className="flex flex-col">
       <Header title="Content" />
@@ -102,13 +96,6 @@ export default function ContentPage() {
 
         {/* Toolbar */}
         <div className="flex items-center gap-3 flex-wrap">
-          <Select value={filterEntity} onValueChange={setFilterEntity}>
-            <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="All entities" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All entities</SelectItem>
-              {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="All statuses" /></SelectTrigger>
             <SelectContent>
@@ -139,7 +126,6 @@ export default function ContentPage() {
               <thead>
                 <tr className="border-b bg-muted/30">
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Title</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden md:table-cell">Entity</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">Platform</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Status</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden lg:table-cell">Updated</th>
@@ -158,9 +144,6 @@ export default function ContentPage() {
                           </p>
                         )}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-xs text-muted-foreground">{entityName(item.entityId)}</span>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
                       <Badge variant="secondary" className="text-xs capitalize">{item.platform}</Badge>
@@ -203,15 +186,6 @@ export default function ContentPage() {
               <Input className="h-8 text-sm" value={editing.title ?? ""} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Entity</Label>
-                <Select value={editing.entityId ?? ""} onValueChange={(v) => setEditing({ ...editing, entityId: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Platform</Label>
                 <Select value={editing.platform ?? "other"} onValueChange={(v) => setEditing({ ...editing, platform: v as ContentPlatform })}>

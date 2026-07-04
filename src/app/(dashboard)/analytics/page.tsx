@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { contentStore, entityStore, type ContentItem, type Entity } from "@/lib/store";
+import { contentStore, type ContentItem } from "@/lib/store";
+import { useActiveEntity } from "@/hooks/use-active-entity";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, TrendingUp, CheckCircle, Clock } from "lucide-react";
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -31,16 +31,15 @@ function Bar({ label, value, max, color }: { label: string; value: number; max: 
 }
 
 export default function AnalyticsPage() {
+  const { activeId } = useActiveEntity();
   const [items, setItems] = useState<ContentItem[]>([]);
-  const [entities, setEntities] = useState<Entity[]>([]);
-  const [filterEntity, setFilterEntity] = useState("all");
 
   useEffect(() => {
-    setItems(contentStore.getAll());
-    setEntities(entityStore.getAll());
-  }, []);
+    if (!activeId) return;
+    setItems(contentStore.getAll().filter(c => c.entityId === activeId));
+  }, [activeId]);
 
-  const filtered = filterEntity === "all" ? items : items.filter((c) => c.entityId === filterEntity);
+  const filtered = items;
 
   const total = filtered.length;
   const published = filtered.filter((c) => c.status === "published").length;
@@ -55,28 +54,13 @@ export default function AnalyticsPage() {
     filtered.reduce<Record<string, number>>((acc, c) => { acc[c.status] = (acc[c.status] ?? 0) + 1; return acc; }, {})
   ).sort((a, b) => b[1] - a[1]);
 
-  const byEntity = entities.map((e) => ({
-    name: e.name,
-    count: items.filter((c) => c.entityId === e.id).length,
-  })).filter((e) => e.count > 0).sort((a, b) => b.count - a.count);
-
   const maxPlatform = Math.max(...byPlatform.map((b) => b[1]), 1);
   const maxStatus = Math.max(...byStatus.map((b) => b[1]), 1);
-  const maxEntity = Math.max(...byEntity.map((b) => b.count), 1);
 
   return (
     <div className="flex flex-col">
       <Header title="Analytics" />
       <div className="flex-1 p-6 animate-fade-in space-y-6">
-        <div className="flex items-center gap-3">
-          <Select value={filterEntity} onValueChange={setFilterEntity}>
-            <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="All entities" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All entities</SelectItem>
-              {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
 
         {/* KPI row */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -98,7 +82,7 @@ export default function AnalyticsPage() {
           ))}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold">By Platform</CardTitle>
@@ -121,19 +105,6 @@ export default function AnalyticsPage() {
                 <p className="text-xs text-muted-foreground">No data yet</p>
               ) : byStatus.map(([s, v]) => (
                 <Bar key={s} label={s} value={v} max={maxStatus} color={STATUS_COLORS[s] ?? "#6B7280"} />
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">By Entity</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {byEntity.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No data yet</p>
-              ) : byEntity.map(({ name, count }) => (
-                <Bar key={name} label={name} value={count} max={maxEntity} color="#6366F1" />
               ))}
             </CardContent>
           </Card>

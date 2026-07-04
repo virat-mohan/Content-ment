@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { contentStore, entityStore, type ContentItem, type Entity } from "@/lib/store";
+import { contentStore, type ContentItem } from "@/lib/store";
+import { useActiveEntity } from "@/hooks/use-active-entity";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -20,16 +21,16 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 export default function CalendarPage() {
+  const { activeId } = useActiveEntity();
   const [today] = useState(new Date());
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [items, setItems] = useState<ContentItem[]>([]);
-  const [entities, setEntities] = useState<Entity[]>([]);
   const [selected, setSelected] = useState<Date | null>(null);
 
   useEffect(() => {
-    setItems(contentStore.getAll());
-    setEntities(entityStore.getAll());
-  }, []);
+    if (!activeId) return;
+    setItems(contentStore.getAll().filter(c => c.entityId === activeId));
+  }, [activeId]);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -50,7 +51,6 @@ export default function CalendarPage() {
   }
 
   const selectedItems = selected ? itemsForDay(selected.getDate()) : [];
-  const entityName = (id: string) => entities.find((e) => e.id === id)?.name ?? "—";
 
   return (
     <div className="flex flex-col">
@@ -130,7 +130,7 @@ export default function CalendarPage() {
                     <span className={cn("mt-1 h-2 w-2 rounded-full shrink-0", STATUS_DOT[item.status])} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">{entityName(item.entityId)} · <span className="capitalize">{item.platform}</span> · <span className="capitalize">{item.status}</span></p>
+                      <p className="text-xs text-muted-foreground capitalize">{item.platform} · {item.status}</p>
                     </div>
                   </div>
                 ))}

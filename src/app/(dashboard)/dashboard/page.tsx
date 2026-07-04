@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { entityStore, contentStore, type Entity, type ContentItem } from "@/lib/store";
+import { contentStore, type ContentItem } from "@/lib/store";
+import { useActiveEntity } from "@/hooks/use-active-entity";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,16 +20,17 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const [entities, setEntities] = useState<Entity[]>([]);
+  const { activeId, activeEntity, entities } = useActiveEntity();
   const [content, setContent] = useState<ContentItem[]>([]);
 
   useEffect(() => {
-    setEntities(entityStore.getAll());
-    setContent(contentStore.getAll());
-  }, []);
+    if (!activeId) return;
+    setContent(contentStore.getAll().filter(c => c.entityId === activeId));
+  }, [activeId]);
 
   const published = content.filter((c) => c.status === "published").length;
-  const recent = content.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
+  const drafts = content.filter((c) => c.status === "draft").length;
+  const recent = [...content].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
 
   return (
     <div className="flex flex-col">
@@ -38,22 +40,12 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">Entities</CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{entities.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Active workspaces</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xs font-medium text-muted-foreground">Content Items</CardTitle>
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-semibold">{content.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Across all entities</p>
+              <p className="text-xs text-muted-foreground mt-1">{activeEntity?.name ?? "—"}</p>
             </CardContent>
           </Card>
           <Card>
@@ -63,7 +55,17 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-semibold">{published}</div>
-              <p className="text-xs text-muted-foreground mt-1">Total published</p>
+              <p className="text-xs text-muted-foreground mt-1">Published pieces</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Drafts</CardTitle>
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold">{drafts}</div>
+              <p className="text-xs text-muted-foreground mt-1">In progress</p>
             </CardContent>
           </Card>
         </div>

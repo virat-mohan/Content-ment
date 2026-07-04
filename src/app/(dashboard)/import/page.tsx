@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { entityStore, contentStore, type Entity, type ContentItem, type ContentPlatform, type ContentStatus } from "@/lib/store";
+import { getActiveEntityId } from "@/lib/active-entity";
 import { generateId } from "@/lib/id";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -173,7 +174,9 @@ export default function ImportPage() {
   useEffect(() => {
     const all = entityStore.getAll();
     setEntities(all);
-    if (all.length) setEntityId(all[0].id);
+    const stored = getActiveEntityId();
+    if (stored && all.find(e => e.id === stored)) setEntityId(stored);
+    else if (all.length) setEntityId(all[0].id);
   }, []);
 
   function applyPreview(rows: string[][], source: string) {

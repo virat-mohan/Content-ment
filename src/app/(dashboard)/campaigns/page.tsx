@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { campaignStore, entityStore, contentStore, type Campaign, type Entity } from "@/lib/store";
+import { campaignStore, contentStore, type Campaign } from "@/lib/store";
+import { useActiveEntity } from "@/hooks/use-active-entity";
 import { generateId } from "@/lib/id";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -27,29 +28,26 @@ const EMPTY: Partial<Campaign> = { name: "", description: "", status: "planning"
 
 export default function CampaignsPage() {
   const { toast } = useToast();
+  const { activeId } = useActiveEntity();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [entities, setEntities] = useState<Entity[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<Campaign>>(EMPTY);
-  const [contentCounts, setContentCounts] = useState<Record<string, number>>({});
+  const [contentCount, setContentCount] = useState(0);
 
   useEffect(() => {
-    setCampaigns(campaignStore.getAll());
-    setEntities(entityStore.getAll());
-    const allContent = contentStore.getAll();
-    const counts: Record<string, number> = {};
-    allContent.forEach((c) => { counts[c.entityId] = (counts[c.entityId] ?? 0) + 1; });
-    setContentCounts(counts);
-  }, []);
+    if (!activeId) return;
+    setCampaigns(campaignStore.getAll().filter(c => c.entityId === activeId));
+    setContentCount(contentStore.getAll().filter(c => c.entityId === activeId).length);
+  }, [activeId]);
 
   function openNew() {
-    setEditing({ ...EMPTY, entityId: entities[0]?.id ?? "" });
+    setEditing({ ...EMPTY, entityId: activeId });
     setOpen(true);
   }
 
   function save() {
     if (!editing.name?.trim() || !editing.entityId) {
-      toast({ title: "Name and entity are required", variant: "destructive" });
+      toast({ title: "Name is required", variant: "destructive" });
       return;
     }
     const now = new Date().toISOString();
@@ -73,11 +71,9 @@ export default function CampaignsPage() {
 
   function remove(id: string) {
     campaignStore.delete(id);
-    setCampaigns(campaignStore.getAll());
+    setCampaigns(campaignStore.getAll().filter(c => c.entityId === activeId));
     toast({ title: "Deleted" });
   }
-
-  const entityName = (id: string) => entities.find((e) => e.id === id)?.name ?? "—";
 
   return (
     <div className="flex flex-col">
@@ -105,7 +101,7 @@ export default function CampaignsPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <CardTitle className="text-sm truncate">{c.name}</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-0.5">{entityName(c.entityId)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{formatRelativeDate(c.createdAt)}</p>
                     </div>
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize shrink-0 ${STATUS_COLORS[c.status]}`}>
                       {c.status}
@@ -120,7 +116,7 @@ export default function CampaignsPage() {
                     </div>
                   )}
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> {contentCounts[c.entityId] ?? 0} items</span>
+                    <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> {contentCount} items</span>
                     <span>{formatRelativeDate(c.updatedAt)}</span>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -149,13 +145,6 @@ export default function CampaignsPage() {
               <Input className="h-8 text-sm" value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Entity</Label>
-                <Select value={editing.entityId ?? ""} onValueChange={(v) => setEditing({ ...editing, entityId: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>{entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Status</Label>
                 <Select value={editing.status ?? "planning"} onValueChange={(v) => setEditing({ ...editing, status: v as Campaign["status"] })}>
