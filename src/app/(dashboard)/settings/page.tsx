@@ -13,13 +13,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Zap, CheckCircle } from "lucide-react";
 
 const PROVIDER_MODELS: Record<string, string[]> = {
-  CLAUDE: ["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"],
+  CLAUDE: ["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5", "claude-sonnet-4-6"],
   OPENAI: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-  GEMINI: ["gemini-1.5-pro", "gemini-1.5-flash"],
-  OPENROUTER: ["anthropic/claude-opus-4-5", "openai/gpt-4o", "google/gemini-pro"],
-  DEEPSEEK: ["deepseek-chat"],
-  GROK: ["grok-beta"],
-  MISTRAL: ["mistral-large-latest"],
+  GEMINI: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+  OPENROUTER: ["anthropic/claude-sonnet-4-5", "openai/gpt-4o", "google/gemini-2.0-flash"],
+  DEEPSEEK: ["deepseek-chat", "deepseek-reasoner"],
+  GROK: ["grok-3", "grok-3-mini", "grok-beta"],
+  MISTRAL: ["mistral-large-latest", "mistral-small-latest"],
 };
 
 export default function SettingsPage() {
